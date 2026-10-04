@@ -2410,6 +2410,8 @@ export default function App() {
 
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-slate-900 dark:to-indigo-950 text-gray-900 dark:text-gray-100">
+			{/* Accessibility: keyboard users can jump past the header */}
+			<a href="#main-content" className="sr-only-focusable fixed top-2 left-2 z-[100] px-3 py-2 rounded-lg bg-white text-indigo-700 shadow-lg border-2 border-indigo-300 font-semibold text-sm">Skip to main content</a>
 			<header className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-xl backdrop-blur-sm">
 				<div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4 text-white">
 					<div className="flex items-center gap-3">
@@ -2422,7 +2424,7 @@ export default function App() {
 						</div>
 					</div>
 					<div className="ml-auto hidden md:flex text-sm opacity-95 items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm"><Info className="w-4 h-4" /> Smarter travel, safer roads</div>
-					<button onClick={() => setShowMessages((s) => !s)} className="ml-auto md:ml-4 flex items-center gap-2 text-sm px-3 sm:px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105">
+					<button onClick={() => setShowMessages((s) => !s)} aria-label={`Messages from admin${adminMessages.length > 0 ? ` (${adminMessages.length} unread)` : ''}`} className="ml-auto md:ml-4 flex items-center gap-2 text-sm px-3 sm:px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105">
 						<Bell className="w-4 h-4" />
 						{adminMessages.length > 0 && <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-semibold animate-pulse">{adminMessages.length}</span>}
 					</button>
@@ -2483,7 +2485,7 @@ export default function App() {
 			{/* Global modals */}
 			{/* Reject modal */}
 			{rejectModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Reject hazard report">
 					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeRejectModal} />
 					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
 						<h3 className="text-base font-bold mb-3">Reject Report</h3>
@@ -2499,7 +2501,7 @@ export default function App() {
 
 			{/* Fix proof modal */}
 			{fixModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Submit fix proof">
 					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeFixModal} />
 					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
 						<h3 className="text-base font-bold mb-2">Mark Pothole Fixed</h3>
@@ -2535,7 +2537,7 @@ export default function App() {
 
 			{/* Image preview modal */}
 			{imageModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label={imageModal.caption || 'Photo preview'}>
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeImageModal} />
 					<div className="relative z-10 w-[90vw] max-w-5xl max-h-[90vh] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl p-3 shadow-2xl">
 						<div className="flex items-center justify-between mb-2">
@@ -2585,7 +2587,7 @@ export default function App() {
 
 			{/* Camera capture modal */}
 			{cameraOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Camera capture">
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeCameraModal} />
 					<div className="relative z-10 w-full max-w-md bg-black rounded-lg overflow-hidden shadow-xl">
 						<div className="relative w-full aspect-[3/4] bg-black">
@@ -2611,14 +2613,15 @@ export default function App() {
 				</div>
 			)}
 
-			<main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+			<main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 				<section className="lg:col-span-2 space-y-6">
 					{/* Controls */}
 					<div ref={reportCardRef} className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
 						<div className="grid gap-4 md:grid-cols-2">
 							<div className="relative">
-								<label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Source</label>
+								<label htmlFor="source-input" className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Source</label>
 								<input
+									id="source-input"
 									type="text"
 									ref={sourceInputRef}
 									value={sourceQuery}
@@ -2657,8 +2660,9 @@ export default function App() {
 							</div>
 
 							<div className="relative">
-								<label className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Destination</label>
+								<label htmlFor="destination-input" className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Destination</label>
 								<input
+									id="destination-input"
 									type="text"
 									ref={destInputRef}
 									value={destQuery}
@@ -2703,10 +2707,10 @@ export default function App() {
 								</button>
 								{stopSearchOpen && (
 									<div className="absolute z-20 mt-2 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded shadow">
-										<div className="p-2 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800">
-											<input
-												type="text"
-												value={stopSearchQuery}
+										<div className="p-2 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800">												<input
+													type="text"
+													aria-label="Search a place to add as stop"
+													value={stopSearchQuery}
 												onChange={(e) => setStopSearchQuery(e.target.value)}
 												placeholder="Search a place to add as stop"
 												className="w-full px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900"
@@ -3056,6 +3060,7 @@ export default function App() {
 								<button
 									onClick={() => setLayersMenuOpen((v) => !v)}
 									aria-expanded={layersMenuOpen}
+									aria-label="Map layers"
 									title="Map layers"
 									className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
 								>
