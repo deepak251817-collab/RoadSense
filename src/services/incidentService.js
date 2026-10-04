@@ -14,6 +14,7 @@
  * incidents and is reported as unavailable.
  */
 import { pointLineDistMeters, distMeters, isValidCoord } from "../utils/geo";
+import { fetchWithTimeout } from "./httpClient";
 
 /** Supported incident types. */
 export const INCIDENT_TYPES = {
@@ -224,7 +225,11 @@ function parseExternalFeature(feature, i) {
 export async function fetchExternalIncidents(url) {
   if (!url) return { available: false, items: [], error: null };
   try {
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const res = await fetchWithTimeout(url, {
+      headers: { Accept: "application/json" },
+      timeoutMs: 8000,
+      retries: 1,
+    });
     if (!res.ok) throw new Error(`Incident feed ${res.status}`);
     const json = await res.json();
     const features = Array.isArray(json) ? json : Array.isArray(json?.features) ? json.features : [];

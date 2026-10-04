@@ -36,6 +36,7 @@ import {
 import { analyzeRoutes, collectRouteReports } from "./utils/routeAnalysis";
 import { recommendRoute, buildRecommendationReasons } from "./utils/recommendation";
 import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "./services/incidentService";
+import { fetchJson, fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
 import { formatAheadDistance } from "./utils/hazardAlerts";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -560,13 +561,13 @@ export default function App() {
 		if (!q || q.length < 3) return [];
 		const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=${encodeURIComponent(q)}`;
 		try {
-			const res = await fetch(url, {
-				headers: {
-					// Identify application per Nominatim usage policy
-					"Accept": "application/json",
-				},
+			// Timeout + bounded retries + short TTL cache (Nominatim is rate-limited)
+			const { data } = await fetchJsonCached(url, {
+				headers: { "Accept": "application/json" },
+				timeoutMs: 8000,
+				retries: 1,
+				ttlMs: 5 * 60 * 1000,
 			});
-			const data = await res.json();
 			return (
 				data?.map((item) => ({
 					id: item.place_id,
@@ -582,9 +583,12 @@ export default function App() {
 	const reverseGeocode = async (lng, lat) => {
 		try {
 			const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-			const res = await fetch(url, { headers: { Accept: "application/json" } });
-			if (!res.ok) return null;
-			const data = await res.json();
+			const { data } = await fetchJsonCached(url, {
+				headers: { Accept: "application/json" },
+				timeoutMs: 8000,
+				retries: 1,
+				ttlMs: 10 * 60 * 1000,
+			});
 			return data?.display_name || null;
 		} catch {
 			return null;
@@ -1093,7 +1097,7 @@ export default function App() {
 				.map((c) => `${c[0]},${c[1]}`)
 				.join(";");
 			const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordsList}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
-			const res = await fetch(url);
+			const res = await fetchWithTimeout(url, { timeoutMs: 12000, retries: 1 });
 			const data = await res.json();
 			const routesData = data?.routes ?? [];
 			if (!routesData.length) {
@@ -1299,7 +1303,7 @@ export default function App() {
 				pts.map(async (p) => {
 					const [lng, lat] = p.coord;
 					const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${OW_KEY}&units=metric`;
-					const res = await fetch(url);
+					const res = await fetchWithTimeout(url, { timeoutMs: 8000, retries: 1 });
 					if (!res.ok) throw new Error(`Weather error ${res.status}`);
 					const data = await res.json();
 					return { ...p, data };
@@ -1369,7 +1373,10 @@ export default function App() {
 		try {
 			const trafficUrl = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${sourceCoord[0]},${sourceCoord[1]};${destCoord[0]},${destCoord[1]}?${baseParams}&annotations=congestion&access_token=${mapboxgl.accessToken}`;
 			const freeUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${sourceCoord[0]},${sourceCoord[1]};${destCoord[0]},${destCoord[1]}?${baseParams}&access_token=${mapboxgl.accessToken}`;
-			const [trRes, frRes] = await Promise.all([fetch(trafficUrl), fetch(freeUrl)]);
+			const [trRes, frRes] = await Promise.all([
+				fetchWithTimeout(trafficUrl, { timeoutMs: 12000, retries: 1 }),
+				fetchWithTimeout(freeUrl, { timeoutMs: 12000, retries: 1 }),
+			]);
 			let trData, frData;
 			if (!trRes.ok) {
 				const msg = await trRes.text();
@@ -1466,10 +1473,14 @@ export default function App() {
 			minLng -= pad; maxLng += pad; minLat -= pad; maxLat += pad;
 			// Overpass query for nodes/ways with tags indicating bad surface or hazard pothole
 			const overpassQL = `[out:json][timeout:25];(node["hazard"~"pothole"](${minLat},${minLng},${maxLat},${maxLng});way["hazard"~"pothole"](${minLat},${minLng},${maxLat},${maxLng});way["surface"~"gravel|unpaved|dirt|ground|potholes"](${minLat},${minLng},${maxLat},${maxLng});node["surface"~"potholes"](${minLat},${minLng},${maxLat},${maxLng}););out body center qt;`;
-			const res = await fetch("https://overpass-api.de/api/interpreter", {
-				method: "POST",
+			const res = await fetchWithTimeout("https://overpass-api.de/api/interpreter", {
+				timeoutMs: 30000,
+				retries: 1,
 				headers: { "Content-Type": "application/x-www-form-urlencoded" },
-				body: `data=${encodeURIComponent(overpassQL)}`,
+				init: {
+					method: "POST",
+					body: `data=${encodeURIComponent(overpassQL)}`,
+				},
 			});
 			if (!res.ok) throw new Error(`Overpass ${res.status}`);
 			const json = await res.json();
@@ -1708,7 +1719,7 @@ export default function App() {
 		try {
 			// Step 1: fetch dataset metadata to discover resource IDs.
 			const datasetMetaUrl = 'https://data.opencity.in/api/dataset/bbmp-fix-my-street-data';
-			const metaRes = await fetch(datasetMetaUrl);
+			const metaRes = await fetchWithTimeout(datasetMetaUrl, { timeoutMs: 12000, retries: 1 });
 			if (!metaRes.ok) throw new Error('Dataset metadata failed ' + metaRes.status);
 			const meta = await metaRes.json();
 			let resourceId = null;
@@ -1734,7 +1745,7 @@ export default function App() {
 			}
 			// Step 2: fetch actual resource data.
 			const resourceUrl = `https://data.opencity.in/api/dataset/bbmp-fix-my-street-data/resource/${resourceId}`;
-			const res = await fetch(resourceUrl);
+			const res = await fetchWithTimeout(resourceUrl, { timeoutMs: 15000, retries: 1 });
 			if (!res.ok) throw new Error('Resource fetch failed ' + res.status);
 			const raw = await res.json();
 			// Data may be an array or wrapped in { data: [...] } or { records: [...] }
