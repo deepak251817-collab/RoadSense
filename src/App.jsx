@@ -2411,18 +2411,18 @@ export default function App() {
 	return (
 		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-slate-900 dark:to-indigo-950 text-gray-900 dark:text-gray-100">
 			<header className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-xl backdrop-blur-sm">
-				<div className="max-w-7xl mx-auto px-6 py-5 flex items-center gap-4 text-white">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4 text-white">
 					<div className="flex items-center gap-3">
 						<div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg">
-							<MapPin className="w-7 h-7" />
+							<MapPin className="w-6 h-6 sm:w-7 sm:h-7" />
 						</div>
 						<div>
-							<h1 className="text-3xl font-bold tracking-tight">STARS</h1>
+							<h1 className="text-2xl sm:text-3xl font-bold tracking-tight">STARS</h1>
 							<p className="text-xs opacity-90 font-medium">Route Finder</p>
 						</div>
 					</div>
-					<div className="ml-auto text-sm opacity-95 flex items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm"><Info className="w-4 h-4" /> Smarter travel, safer roads</div>
-					<button onClick={() => setShowMessages((s) => !s)} className="ml-4 flex items-center gap-2 text-sm px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105">
+					<div className="ml-auto hidden md:flex text-sm opacity-95 items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm"><Info className="w-4 h-4" /> Smarter travel, safer roads</div>
+					<button onClick={() => setShowMessages((s) => !s)} className="ml-auto md:ml-4 flex items-center gap-2 text-sm px-3 sm:px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105">
 						<Bell className="w-4 h-4" />
 						{adminMessages.length > 0 && <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-semibold animate-pulse">{adminMessages.length}</span>}
 					</button>
@@ -2483,7 +2483,7 @@ export default function App() {
 			{/* Global modals */}
 			{/* Reject modal */}
 			{rejectModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
 					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeRejectModal} />
 					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
 						<h3 className="text-base font-bold mb-3">Reject Report</h3>
@@ -2499,7 +2499,7 @@ export default function App() {
 
 			{/* Fix proof modal */}
 			{fixModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
 					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeFixModal} />
 					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
 						<h3 className="text-base font-bold mb-2">Mark Pothole Fixed</h3>
@@ -2535,7 +2535,7 @@ export default function App() {
 
 			{/* Image preview modal */}
 			{imageModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeImageModal} />
 					<div className="relative z-10 w-[90vw] max-w-5xl max-h-[90vh] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl p-3 shadow-2xl">
 						<div className="flex items-center justify-between mb-2">
@@ -2585,7 +2585,7 @@ export default function App() {
 
 			{/* Camera capture modal */}
 			{cameraOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center">
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4">
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeCameraModal} />
 					<div className="relative z-10 w-full max-w-md bg-black rounded-lg overflow-hidden shadow-xl">
 						<div className="relative w-full aspect-[3/4] bg-black">
@@ -2611,7 +2611,7 @@ export default function App() {
 				</div>
 			)}
 
-			<main className="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+			<main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 				<section className="lg:col-span-2 space-y-6">
 					{/* Controls */}
 					<div ref={reportCardRef} className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
@@ -2784,7 +2784,7 @@ export default function App() {
 								Clear all
 							</button>
 							{/* Map style toggles */}
-							<div className="ml-2 flex items-center gap-2">
+							<div className="ml-0 sm:ml-2 flex flex-wrap items-center gap-2">
 								<button onClick={() => switchMapStyle('streets')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'streets' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Streets</button>
 								<button onClick={() => switchMapStyle('satellite')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'satellite' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Satellite</button>
 								<button onClick={() => switchMapStyle('traffic')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'traffic' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Traffic</button>
