@@ -14,6 +14,7 @@ import {
 import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence } from "./utils/confidence";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
+import { detectHotspots, HOTSPOT_CONFIG } from "./utils/hotspots";
 import {
   normalizeStatus,
   nextStatuses,
@@ -138,6 +139,8 @@ export default function App() {
 	const bbmpDataRef = useRef(null); // store fetched GeoJSON features
 	// Safety heatmap layer (weighted hazard density over the map)
 	const [safetyHeatmapOn, setSafetyHeatmapOn] = useState(false);
+	// Hazard hotspot panel (ranked areas of concentrated active hazards)
+	const [showHotspots, setShowHotspots] = useState(false);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState(null);
@@ -905,6 +908,16 @@ export default function App() {
 
 	// Data-driven explanations for the recommendation (only real metric differences)
 	const recommendationReasons = useMemo(() => buildRecommendationReasons(routeAnalyses, recommendation), [routeAnalyses, recommendation]);
+
+	// Ranked hazard hotspots (concentrated active hazards, best-first)
+	const hotspots = useMemo(() => detectHotspots(userReports, { includeFixed: showFixed }), [userReports, showFixed]);
+
+	// Fly the map to a hotspot zone
+	const focusHotspot = (coord) => {
+		const map = window._mapInstance;
+		if (!map || !Array.isArray(coord)) return;
+		try { map.flyTo({ center: coord, zoom: 15, duration: 800 }); } catch { }
+	};
 
 	// Route-aware hazard alerts for the currently selected route
 	const selectedRouteCoords =
@@ -2681,6 +2694,14 @@ export default function App() {
 						<span className="font-medium">Safety heatmap</span>
 						{userReports.length === 0 && <span className="text-xs text-gray-400">(no reports yet)</span>}
 					</label>
+					<button
+						onClick={() => setShowHotspots((v) => !v)}
+						aria-expanded={showHotspots}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showHotspots ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<AlertTriangle className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Hotspots{hotspots.length > 0 ? ` (${hotspots.length})` : ''}</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -2721,6 +2742,46 @@ export default function App() {
 						{/* Avoid feature removed for now */}
 					</div>
 					{/* Avoidance status removed */}
+					{/* Ranked hazard hotspots */}
+					{showHotspots && (
+						<div className="mt-4 rounded-2xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-4" role="region" aria-label="Hazard hotspots">
+							<div className="flex items-center justify-between mb-2">
+								<h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Hazard hotspots</h3>
+								<button onClick={() => setShowHotspots(false)} className="text-xs text-amber-700 dark:text-amber-300 underline">Hide</button>
+							</div>
+							{hotspots.length === 0 ? (
+								<p className="text-sm text-gray-600 dark:text-gray-300">
+									{userReports.length === 0
+										? 'No hazard reports yet. Hotspots appear once 2+ active hazards cluster within 150 m.'
+										: 'No hotspot zones found — active hazards are spread out rather than concentrated.'}
+								</p>
+							) : (
+								<ul className="space-y-2">
+									{hotspots.map((h, i) => (
+										<li key={h.id}>
+											<button
+												onClick={() => focusHotspot(h.coord)}
+												className="w-full flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-900 px-3 py-2 text-left hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+											>
+												<span className="w-7 h-7 flex-shrink-0 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
+												<span className="flex-1 min-w-0">
+													<span className="block text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{h.label}</span>
+													<span className="block text-xs text-gray-500 dark:text-gray-400">
+														Risk {h.score}/100 · ~{h.radiusMeters} m zone{h.recentCount > 0 ? ` · ${h.recentCount} new in last ${HOTSPOT_CONFIG.recentDays}d` : ''}
+													</span>
+												</span>
+												<span
+													className={`flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded-full ${h.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}
+												>
+													{h.severity === 'high' ? 'HIGH' : h.severity.toUpperCase()}
+												</span>
+											</button>
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					)}
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
