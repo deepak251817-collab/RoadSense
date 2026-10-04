@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, Layers } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -14,18 +14,13 @@ import {
 import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence } from "./utils/confidence";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
-import { detectHotspots, HOTSPOT_CONFIG } from "./utils/hotspots";
+import { detectHotspots } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow } from "./utils/safetyScore";
 import {
-  createTrip,
-  endTrip,
-  upsertTrip,
-  replaceTrip,
-  loadTripHistory,
-  saveTripHistory,
   tripSummary,
 } from "./utils/tripHistory";
-import { computeSafetyAnalytics, ANALYTICS_CONFIG } from "./utils/analytics";
+import useTripHistory from "./hooks/useTripHistory";
+import { computeSafetyAnalytics } from "./utils/analytics";
 import {
   normalizeStatus,
   nextStatuses,
@@ -36,8 +31,12 @@ import {
 import { analyzeRoutes, collectRouteReports } from "./utils/routeAnalysis";
 import { recommendRoute, buildRecommendationReasons } from "./utils/recommendation";
 import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "./services/incidentService";
-import { fetchJson, fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
-import { formatAheadDistance } from "./utils/hazardAlerts";
+import { fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
+import HazardAlertStack from "./components/HazardAlertStack";
+import HotspotsPanel from "./components/HotspotsPanel";
+import TripsPanel from "./components/TripsPanel";
+import AnalyticsPanel from "./components/AnalyticsPanel";
+import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
   isSpeechSupported,
@@ -159,9 +158,6 @@ export default function App() {
 	const [layersMenuOpen, setLayersMenuOpen] = useState(false);
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
-	// Trip history (persisted record of routes actually used)
-	const [tripHistory, setTripHistory] = useState([]);
-	const activeTripRef = useRef(null); // { trip, routeIndex } — trip not yet ended
 	const [showTrips, setShowTrips] = useState(false);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
@@ -982,57 +978,17 @@ export default function App() {
 		try { map.flyTo({ center: coord, zoom: 15, duration: 800 }); } catch { }
 	};
 
-	// ---- Trip history: record every route actually used ----
-	const persistTrips = (updater) => {
-		setTripHistory((prev) => {
-			const next = updater(prev);
-			saveTripHistory(next);
-			return next;
-		});
-	};
-
-	// Load persisted history once on mount
-	useEffect(() => { setTripHistory(loadTripHistory()); }, []);
-
-	// Opening a route starts a trip; switching/clearing ends the previous one.
-	// The trip snapshot records conditions known at start (later traffic
-	// refreshes do not rewrite history).
-	useEffect(() => {
-		if (activeTripRef.current) {
-			const closed = endTrip(activeTripRef.current.trip, { arrived: false });
-			activeTripRef.current = null;
-			persistTrips((prev) => replaceTrip(prev, closed));
-		}
-		if (selectedRouteId == null || !Array.isArray(routes) || !routes.length) return;
-		const idx = Number(selectedRouteId);
-		const ana = routeAnalyses[idx];
-		const trip = createTrip({
-			originCoord: sourceCoord,
-			originLabel: sourceQuery || '',
-			destCoord: destCoord,
-			destLabel: destQuery || '',
-			routeIndex: idx,
-			distanceMeters: ana?.distanceMeters ?? routes[idx]?.distance,
-			durationMinutes: ana?.durationMinutes ?? (routes[idx]?.duration ? Math.round(routes[idx].duration / 60) : null),
-			safetyScore: ana?.score ?? null,
-			classification: ana?.classification?.label ?? '',
-			incidentCount: ana?.incidents?.count ?? null,
-			potholeCount: ana?.potholes?.count ?? null,
-		});
-		if (!trip) return;
-		activeTripRef.current = { trip, routeIndex: idx };
-		persistTrips((prev) => upsertTrip(prev, trip));
-	}, [selectedRouteId, routes]);
-
-	// Arrival: user within 120 m of the destination completes the active trip
-	useEffect(() => {
-		const active = activeTripRef.current;
-		if (!active || !userCoord || !destCoord) return;
-		if (distMeters(userCoord, destCoord) > 120) return;
-		const trip = endTrip(active.trip, { arrived: true });
-		activeTripRef.current = null;
-		persistTrips((prev) => replaceTrip(prev, trip));
-	}, [userCoord, destCoord]);
+	// ---- Trip history: record every route actually used (see hooks/useTripHistory) ----
+	const { tripHistory, persistTrips } = useTripHistory({
+		routes,
+		selectedRouteId,
+		routeAnalyses,
+		sourceCoord,
+		destCoord,
+		sourceQuery,
+		destQuery,
+		userCoord,
+	});
 
 	// Route-aware hazard alerts for the currently selected route
 	const selectedRouteCoords =
@@ -2468,30 +2424,7 @@ export default function App() {
 		)}
 
 		{/* Route hazard alerts — auto-managed with throttling, dismissible */}
-		{hazardAlerts.alerts.length > 0 && (
-			<div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[min(94vw,460px)] space-y-2" aria-live="assertive" aria-label="Route hazard alerts">
-				{hazardAlerts.alerts.map((a) => {
-					const critical = a.severity === "critical" || a.title === "ROAD CLOSURE" || a.title === "ACCIDENT";
-					return (
-						<div key={a.key} role="alert" className={`rounded-xl shadow-2xl border-2 px-4 py-3 flex items-start gap-3 backdrop-blur-md ${critical ? "bg-red-50/95 border-red-400 text-red-900 dark:bg-red-950/90 dark:border-red-700 dark:text-red-100" : "bg-amber-50/95 border-amber-400 text-amber-900 dark:bg-amber-950/90 dark:border-amber-600 dark:text-amber-100"}`}>
-							<AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${critical ? "text-red-600" : "text-amber-600"}`} aria-hidden="true" />
-							<div className="flex-1 min-w-0">
-								<div className="text-xs font-bold tracking-wide">{a.title}</div>
-								<div className="text-sm font-medium">{a.message}</div>
-							</div>
-							<div className="text-sm font-bold whitespace-nowrap">{formatAheadDistance(a.aheadMeters)} ahead</div>
-							<button
-								onClick={() => hazardAlerts.dismiss(a.key)}
-								aria-label={`Dismiss ${a.title} alert`}
-								className="p-1 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-current"
-							>
-								<X className="w-4 h-4" aria-hidden="true" />
-							</button>
-						</div>
-					);
-				})}
-			</div>
-		)}
+		<HazardAlertStack alerts={hazardAlerts.alerts} onDismiss={hazardAlerts.dismiss} />
 
 			{/* Global modals */}
 			{/* Reject modal */}
@@ -2896,168 +2829,23 @@ export default function App() {
 					</div>
 					{/* Avoidance status removed */}
 					{/* Ranked hazard hotspots */}
-					{showHotspots && (
-						<div className="mt-4 rounded-2xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50/70 dark:bg-amber-900/20 p-4" role="region" aria-label="Hazard hotspots">
-							<div className="flex items-center justify-between mb-2">
-								<h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">Hazard hotspots</h3>
-								<button onClick={() => setShowHotspots(false)} className="text-xs text-amber-700 dark:text-amber-300 underline">Hide</button>
-							</div>
-							{hotspots.length === 0 ? (
-								<p className="text-sm text-gray-600 dark:text-gray-300">
-									{userReports.length === 0
-										? 'No hazard reports yet. Hotspots appear once 2+ active hazards cluster within 150 m.'
-										: 'No hotspot zones found — active hazards are spread out rather than concentrated.'}
-								</p>
-							) : (
-								<ul className="space-y-2">
-									{hotspots.map((h, i) => (
-										<li key={h.id}>
-											<button
-												onClick={() => focusHotspot(h.coord)}
-												className="w-full flex items-center gap-3 rounded-xl border border-amber-200 dark:border-amber-700 bg-white dark:bg-gray-900 px-3 py-2 text-left hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
-											>
-												<span className="w-7 h-7 flex-shrink-0 rounded-full bg-amber-500 text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
-												<span className="flex-1 min-w-0">
-													<span className="block text-sm font-medium text-gray-800 dark:text-gray-100 truncate">{h.label}</span>
-													<span className="block text-xs text-gray-500 dark:text-gray-400">
-														Risk {h.score}/100 · ~{h.radiusMeters} m zone{h.recentCount > 0 ? ` · ${h.recentCount} new in last ${HOTSPOT_CONFIG.recentDays}d` : ''}
-													</span>
-												</span>
-												<span
-													className={`flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded-full ${h.severity === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'}`}
-												>
-													{h.severity === 'high' ? 'HIGH' : h.severity.toUpperCase()}
-												</span>
-											</button>
-										</li>
-									))}
-								</ul>
-							)}
-						</div>
-					)}
+					<HotspotsPanel
+						show={showHotspots}
+						hotspots={hotspots}
+						hasReports={userReports.length > 0}
+						onClose={() => setShowHotspots(false)}
+						onFocus={focusHotspot}
+					/>
 					{/* Trip history */}
-					{showTrips && (
-						<div className="mt-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-4" role="region" aria-label="Trip history">
-							<div className="flex items-center justify-between mb-2">
-								<h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Trip history</h3>
-								<div className="flex items-center gap-3">
-									{tripHistory.length > 0 && (
-										<button onClick={() => { persistTrips(() => []); }} className="text-xs text-red-600 dark:text-red-400 underline">Clear</button>
-									)}
-									<button onClick={() => setShowTrips(false)} className="text-xs text-indigo-700 dark:text-indigo-300 underline">Hide</button>
-								</div>
-							</div>
-							{tripStats.tripCount > 0 && (
-								<div className="mb-2 text-xs text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-3 py-2 border border-indigo-200 dark:border-indigo-800">
-									{tripStats.tripCount} trip{tripStats.tripCount === 1 ? '' : 's'} · {tripStats.totalKm} km · avg safety {tripStats.avgSafety ?? '—'} · arrived {tripStats.arrivedCount}
-								</div>
-							)}
-							{tripHistory.length === 0 ? (
-								<p className="text-sm text-gray-600 dark:text-gray-300">No trips yet. Select a route and it will be recorded here with its safety score.</p>
-							) : (
-								<ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
-									{tripHistory.slice(0, 20).map((t) => {
-										const isActive = t.endedAt == null;
-										const score = t.safetyScore;
-										const scoreColor = score == null ? '#6b7280' : score >= 75 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
-										return (
-											<li key={t.id} className="rounded-xl border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 px-3 py-2">
-												<div className="flex items-center justify-between gap-2">
-													<span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">
-														{t.originLabel || `${t.originCoord[1].toFixed(3)},${t.originCoord[0].toFixed(3)}`}
-														{' → '}
-														{t.destLabel || `${t.destCoord[1].toFixed(3)},${t.destCoord[0].toFixed(3)}`}
-													</span>
-													<span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' : t.arrived ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-														{isActive ? 'IN PROGRESS' : t.arrived ? 'ARRIVED' : 'ENDED'}
-													</span>
-												</div>
-												<div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 flex-wrap">
-													<span>{new Date(t.startedAt).toLocaleString()}</span>
-													<span>· Route {t.routeIndex + 1}</span>
-													{t.distanceMeters != null && <span>· {(t.distanceMeters / 1000).toFixed(1)} km</span>}
-													{t.durationMinutes != null && <span>· {t.durationMinutes} min</span>}
-													{score != null && (
-														<span className="font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: scoreColor }} title={`Safety score${t.classification ? ` — ${t.classification}` : ''}`}>{score}</span>
-													)}
-												</div>
-											</li>
-										);
-									})}
-								</ul>
-							)}
-						</div>
-					)}
+					<TripsPanel
+						show={showTrips}
+						trips={tripHistory}
+						stats={tripStats}
+						onClear={() => persistTrips(() => [])}
+						onClose={() => setShowTrips(false)}
+					/>
 					{/* Safety analytics */}
-					{showAnalytics && (
-						<div className="mt-4 rounded-2xl border-2 border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-900/20 p-4" role="region" aria-label="Safety analytics">
-							<div className="flex items-center justify-between mb-3">
-								<h3 className="text-sm font-semibold text-teal-800 dark:text-teal-200">Safety analytics</h3>
-								<button onClick={() => setShowAnalytics(false)} className="text-xs text-teal-700 dark:text-teal-300 underline">Hide</button>
-							</div>
-							{/* KPI cards */}
-							<div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-								{[
-									{ label: 'Active hazards', value: safetyAnalytics.hazards.active, color: '#d97706' },
-									{ label: 'Fixed', value: safetyAnalytics.hazards.fixed, color: '#16a34a' },
-									{ label: 'Fix rate', value: safetyAnalytics.hazards.fixRate == null ? '—' : `${safetyAnalytics.hazards.fixRate}%`, color: '#0f766e' },
-									{ label: `Last ${ANALYTICS_CONFIG.recentDays}d reports`, value: safetyAnalytics.hazards.recentCount, color: '#2563eb' },
-									{ label: 'Trips taken', value: safetyAnalytics.trips.tripCount, color: '#7c3aed' },
-									{ label: 'Avg trip safety', value: safetyAnalytics.trips.avgSafety ?? '—', color: '#4f46e5' },
-								].map((k) => (
-									<div key={k.label} className="rounded-xl bg-white dark:bg-gray-900 border border-teal-200 dark:border-teal-800 px-3 py-2">
-										<div className="text-lg font-bold" style={{ color: k.color }}>{k.value}</div>
-										<div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{k.label}</div>
-									</div>
-								))}
-							</div>
-							{/* Weekly report trend */}
-							<div className="rounded-xl bg-white dark:bg-gray-900 border border-teal-200 dark:border-teal-800 p-3 mb-3">
-								<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Reports per week (last 8 weeks)</div>
-								<ResponsiveContainer width="100%" height={130}>
-									<LineChart data={safetyAnalytics.trend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-										<CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
-										<XAxis dataKey="label" tick={{ fontSize: 10 }} />
-										YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-										<Tooltip />
-										<Line type="monotone" dataKey="count" stroke="#0d9488" strokeWidth={2} dot={{ r: 3 }} />
-									</LineChart>
-								</ResponsiveContainer>
-							</div>
-							{/* Lifecycle + severity */}
-							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-								<div>
-									<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Hazard lifecycle</div>
-									<div className="flex flex-wrap gap-1.5">
-										{safetyAnalytics.lifecycle.map((l) => {
-											const sty = STATUS_STYLES[l.status] || STATUS_STYLES.reported;
-											return (
-												<span key={l.status} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sty.bg, color: sty.text }} title={`${l.label}: ${l.count}`}>
-													{l.label}: {l.count}
-												</span>
-											);
-										})}
-									</div>
-								</div>
-								<div>
-									<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Severity mix (all reports)</div>
-									<div className="flex flex-wrap gap-1.5">
-										{[
-											{ label: 'High', value: safetyAnalytics.hazards.severity.high, color: '#dc2626' },
-											{ label: 'Moderate', value: safetyAnalytics.hazards.severity.moderate, color: '#d97706' },
-											{ label: 'Low', value: safetyAnalytics.hazards.severity.low, color: '#16a34a' },
-											{ label: 'Other', value: safetyAnalytics.hazards.severity.other, color: '#6b7280' },
-										].map((s) => (
-											<span key={s.label} className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: s.color }}>
-												{s.label}: {s.value}
-											</span>
-										))}
-									</div>
-									<div className="mt-1.5 text-[10px] text-gray-500 dark:text-gray-400">Totals are derived only from your stored reports and trips.</div>
-								</div>
-							</div>
-						</div>
-					)}
+					<AnalyticsPanel show={showAnalytics} analytics={safetyAnalytics} onClose={() => setShowAnalytics(false)} />
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
@@ -3067,34 +2855,17 @@ export default function App() {
 							</div>
 						)}
 						<div className="absolute top-4 right-4 flex items-center gap-2">
-							<div className="relative">
-								<button
-									onClick={() => setLayersMenuOpen((v) => !v)}
-									aria-expanded={layersMenuOpen}
-									aria-label="Map layers"
-									title="Map layers"
-									className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
-								>
-									<Layers className="w-4 h-4" aria-hidden="true" />
-								</button>
-								{layersMenuOpen && (
-									<div className="absolute right-0 mt-2 w-52 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-xl p-3 z-30" role="group" aria-label="Layer visibility">
-										<div className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Layers</div>
-										{[
-											{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
-											{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
-											{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
-											{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
-										].map((l) => (
-											<label key={l.label} className="flex items-center justify-between gap-2 text-xs py-1.5 cursor-pointer text-gray-700 dark:text-gray-200">
-												<span>{l.label}</span>
-												<input type="checkbox" checked={l.checked} onChange={(e) => l.onChange(e.target.checked)} className="w-4 h-4 rounded" />
-											</label>
-										))}
-										{!bbmpLoaded && <div className="mt-1 text-[10px] text-gray-400">BBMP layer appears after loading civic data.</div>}
-									</div>
-								)}
-							</div>
+							<MapLayersPopover
+								open={layersMenuOpen}
+								onToggle={() => setLayersMenuOpen((v) => !v)}
+								bbmpLoaded={bbmpLoaded}
+								layers={[
+									{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
+									{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
+									{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
+									{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
+								]}
+							/>
 							<button
 								onClick={() => setFullMap((v) => !v)}
 								title={fullMap ? 'Exit full view' : 'Full view'}
