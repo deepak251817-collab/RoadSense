@@ -1,0 +1,227 @@
+/**
+ * STARS safety scoring engine.
+ *
+ * Deterministic, dependency-free road-safety risk scoring for routes.
+ * Every factor returns a risk value in the range 0..100 (higher = more risk),
+ * or `null` when the underlying data is genuinely unavailable — unknown data is
+ * never treated as "safe" and never fabricated as "risky": it is excluded from
+ * the weighted score instead.
+ */
+
+/** Configurable factor weights (need not sum to 1; they are normalized). */
+export const DEFAULT_WEIGHTS = {
+  traffic: 0.22,
+  pothole: 0.26,
+  weather: 0.16,
+  incident: 0.12,
+  accident: 0.14,
+  time: 0.10,
+};
+
+/** Safety classification bands (inclusive ranges). */
+export const SAFETY_BANDS = [
+  { min: 90, max: 100, key: "very-safe", label: "Very Safe", color: "#15803d" },
+  { min: 75, max: 89, key: "safe", label: "Safe", color: "#16a34a" },
+  { min: 60, max: 74, key: "moderate", label: "Moderate", color: "#d97706" },
+  { min: 40, max: 59, key: "risky", label: "Risky", color: "#ea580c" },
+  { min: 0, max: 39, key: "high-risk", label: "High Risk", color: "#dc2626" },
+];
+
+/** Clamp any numeric value into the 0..100 score range. */
+export const clampScore = (value) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+};
+
+const round = (v) => Math.round(clampScore(v));
+
+/** Risk value contributed by a single congestion level label. */
+const CONGESTION_LEVEL_RISK = {
+  low: 20,
+  moderate: 50,
+  heavy: 78,
+  severe: 95,
+  unknown: 40,
+};
+
+/**
+ * Traffic risk from real Mapbox traffic data.
+ * @param {Object} input
+ * @param {number|null} [input.avgDelayPct] average delay % (live vs free-flow)
+ * @param {string[]|null} [input.congestionLevels] congestion annotation labels
+ * @returns {number|null} 0..100 risk, or null when no traffic data exists
+ */
+export function calculateTrafficRisk({ avgDelayPct = null, congestionLevels = null } = {}) {
+  if (Array.isArray(congestionLevels) && congestionLevels.length) {
+    const values = congestionLevels.map((l) => CONGESTION_LEVEL_RISK[String(l).toLowerCase()] ?? CONGESTION_LEVEL_RISK.unknown);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    return round(avg);
+  }
+  if (Number.isFinite(avgDelayPct)) {
+    // 0% delay ≈ 10 risk, 100% delay ≈ 100 risk; free-flowing traffic stays low.
+    return round(10 + Math.max(0, avgDelayPct) * 0.9);
+  }
+  return null;
+}
+
+/**
+ * Pothole / road-surface risk from reports near a route.
+ * @param {Object} input
+ * @param {number} [input.count] total reports near the route
+ * @param {number} [input.highSeverityCount] high-severity reports near the route
+ * @param {number|null} [input.distanceMeters] route length for density calculation
+ * @returns {number} 0..100 risk (0 when there are genuinely no reports)
+ */
+export function calculatePotholeRisk({ count = 0, highSeverityCount = 0, distanceMeters = null } = {}) {
+  const total = Math.max(0, count || 0);
+  const high = Math.max(0, Math.min(highSeverityCount || 0, total));
+  if (total === 0) return 0;
+  const distanceKm = Number.isFinite(distanceMeters) && distanceMeters > 0 ? distanceMeters / 1000 : null;
+  const perKm = distanceKm ? total / distanceKm : total; // without a length, treat count as-is
+  const densityRisk = perKm * 30;
+  const severityRisk = high * 12 + (total - high) * 4;
+  return round(densityRisk + severityRisk);
+}
+
+const WEATHER_MAIN_RISK = {
+  thunderstorm: 90,
+  tornado: 100,
+  squall: 92,
+  snow: 80,
+  rain: 60,
+  drizzle: 55,
+  fog: 65,
+  mist: 62,
+  haze: 60,
+  smoke: 68,
+  dust: 70,
+  sand: 70,
+  ash: 72,
+  clouds: 25,
+  clear: 8,
+};
+
+/**
+ * Weather risk from OpenWeather sample points along a route.
+ * @param {Array<{data?: Object}>|Array<Object>} weatherPoints routeWeather points
+ * @returns {number|null} 0..100 risk, or null when no weather data exists
+ */
+export function calculateWeatherRisk(weatherPoints) {
+  if (!Array.isArray(weatherPoints) || !weatherPoints.length) return null;
+  const values = weatherPoints
+    .map((p) => {
+      const w = p?.data ?? p;
+      const main = String(w?.weather?.[0]?.main || "").toLowerCase();
+      const desc = String(w?.weather?.[0]?.description || "").toLowerCase();
+      if (!main) return null;
+      let risk = WEATHER_MAIN_RISK[main] ?? 30;
+      if (main === "rain" && (desc.includes("heavy") || desc.includes("extreme"))) risk = 80;
+      if (main === "thunderstorm" && (desc.includes("heavy") || desc.includes("extreme"))) risk = 95;
+      return risk;
+    })
+    .filter((v) => v != null);
+  if (!values.length) return null;
+  return round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
+const SEVERITY_RISK = { low: 25, medium: 50, high: 75, critical: 95 };
+
+const normalizeIncidents = (incidents) =>
+  (Array.isArray(incidents) ? incidents : []).filter((i) => i && typeof i === "object");
+
+/**
+ * Risk from road incidents (hazards, closures, construction, ...).
+ * @param {Array<Object>} incidents incidents already filtered/near the route
+ * @param {Object} [opts]
+ * @param {boolean} [opts.available] false when no incident source exists at all
+ * @returns {number|null} 0..100 risk, or null when incident data is unavailable
+ */
+export function calculateIncidentRisk(incidents, { available = true } = {}) {
+  if (!available) return null;
+  const list = normalizeIncidents(incidents);
+  if (!list.length) return 0;
+  const values = list.map((i) => SEVERITY_RISK[String(i.severity || "medium").toLowerCase()] ?? SEVERITY_RISK.medium);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return round(avg + 8 * (list.length - 1));
+}
+
+/**
+ * Risk specifically from accidents/collisions along a route.
+ * @param {Array<Object>} incidents incidents (any type)
+ * @param {Object} [opts]
+ * @param {boolean} [opts.available] false when no incident source exists at all
+ * @returns {number|null} 0..100 risk, or null when incident data is unavailable
+ */
+export function calculateAccidentRisk(incidents, { available = true } = {}) {
+  if (!available) return null;
+  const accidents = normalizeIncidents(incidents).filter((i) => {
+    const t = String(i.type || "").toLowerCase();
+    return t === "accident" || t === "collision";
+  });
+  if (!accidents.length) return 0;
+  const ACCIDENT_RISK = { low: 30, medium: 60, high: 85, critical: 100 };
+  const values = accidents.map((i) => ACCIDENT_RISK[String(i.severity || "medium").toLowerCase()] ?? ACCIDENT_RISK.medium);
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return round(avg + 10 * (accidents.length - 1));
+}
+
+/**
+ * Time-of-day risk profile (deterministic hour table).
+ * Rush hours and night driving carry higher baseline risk.
+ * @param {Date} [date]
+ * @returns {number} 0..100 risk
+ */
+export function calculateTimeRisk(date = new Date()) {
+  // index = hour of day (0..23)
+  const HOUR_RISK = [
+    55, 55, 55, 55, 50, 45, // 00-05 night/early
+    40, 55, 75, 75, 45, 40, // 06-11 morning rush then midday
+    40, 40, 40, 45, 60, 75, // 12-17 afternoon build-up
+    78, 75, 60, 50, 45, 55, // 18-23 evening rush then night
+  ];
+  const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  return HOUR_RISK[d.getHours()] ?? 40;
+}
+
+/**
+ * Combine available factor risks into a deterministic 0..100 safety score.
+ * Unavailable factors (`null`) are excluded and their weight is removed from
+ * the denominator, so missing data neither inflates nor penalizes the score.
+ *
+ * @param {Object} factors raw factor risks (see DEFAULT_WEIGHTS keys)
+ * @param {Object} [opts]
+ * @param {Object} [opts.weights] override configurable weights
+ * @returns {{score:number, factorRisks:Object, missingFactors:string[], weights:Object}}
+ */
+export function calculateRouteSafetyScore(factors = {}, { weights = DEFAULT_WEIGHTS } = {}) {
+  const used = {};
+  let weightedSum = 0;
+  let weightTotal = 0;
+  const missingFactors = [];
+  for (const [key, weight] of Object.entries(weights)) {
+    const value = factors[key];
+    if (value == null || !Number.isFinite(value)) {
+      missingFactors.push(key);
+      continue;
+    }
+    const risk = clampScore(value);
+    used[key] = risk;
+    weightedSum += weight * risk;
+    weightTotal += weight;
+  }
+  const score = weightTotal > 0 ? round(100 - weightedSum / weightTotal) : 100;
+  return { score, factorRisks: used, missingFactors, weights };
+}
+
+/**
+ * Classify a 0..100 safety score into a labelled band.
+ * @param {number} score
+ * @returns {{key:string,label:string,color:string,min:number,max:number}}
+ */
+export function classifySafetyScore(score) {
+  const s = clampScore(Number(score));
+  return (
+    SAFETY_BANDS.find((b) => s >= b.min && s <= b.max) ??
+    SAFETY_BANDS[SAFETY_BANDS.length - 1]
+  );
+}
