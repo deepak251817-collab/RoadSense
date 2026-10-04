@@ -4,8 +4,37 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind } from "lucide-react";
-import exifr from "exifr";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind } from "lucide-react";
+import {
+  downscaleImage,
+  getBestLocation,
+  processImageCoordinates,
+  detectPothole,
+} from "./services/potholeDetection";
+import { clusterReports } from "./utils/clustering";
+import { assessReportConfidence } from "./utils/confidence";
+import { buildSafetyHeatmapData } from "./utils/heatmap";
+import {
+  normalizeStatus,
+  nextStatuses,
+  STATUS_LABELS,
+  STATUS_STYLES,
+} from "./utils/hazardLifecycle";
+import { analyzeRoutes, collectRouteReports } from "./utils/routeAnalysis";
+import { recommendRoute, buildRecommendationReasons } from "./utils/recommendation";
+import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "./services/incidentService";
+import { formatAheadDistance } from "./utils/hazardAlerts";
+import useHazardAlerts from "./hooks/useHazardAlerts";
+import {
+  isSpeechSupported,
+  loadVoiceSettings,
+  saveVoiceSettings,
+  cancelSpeech,
+  speakNavigationInstruction,
+  speakSafetyWarning,
+  pickNextStepAnnouncement,
+} from "./services/voiceNavigation";
+import { distMeters } from "./utils/geo";
 import {
 	LineChart,
 	Line,
@@ -17,6 +46,9 @@ import {
 } from "recharts";
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
+
+// Geographic threshold for grouping duplicate pothole reports into one map marker
+const CLUSTER_THRESHOLD_METERS = 50;
 
 // Report pothole section will be rendered later in JSX (standalone card)
 
@@ -44,6 +76,22 @@ export default function App() {
 	const [openDetailsId, setOpenDetailsId] = useState(null);
 	const [openWeatherId, setOpenWeatherId] = useState(null);
 	const [openTrafficId, setOpenTrafficId] = useState(null);
+	// Recommendation panel: null until the user accepts or keeps a route
+	const [recChoice, setRecChoice] = useState(null); // null | 'use' | 'keep'
+	// Incident intelligence state
+	const [externalIncidents, setExternalIncidents] = useState({ available: false, items: [], error: null });
+	const [openIncidentId, setOpenIncidentId] = useState(null);
+	const incidentMarkersRef = useRef([]);
+	const incidentPopupsRef = useRef([]);
+
+	// Optional external incident feed (accidents/closures/construction) via VITE_INCIDENTS_URL
+	useEffect(() => {
+		let alive = true;
+		fetchExternalIncidents(import.meta.env.VITE_INCIDENTS_URL).then((res) => {
+			if (alive) setExternalIncidents(res);
+		});
+		return () => { alive = false; };
+	}, []);
 	// Waypoints and map picking
 	const [stops, setStops] = useState([]); // [[lng, lat], ...]
 	const [pickingMode, setPickingMode] = useState(null); // 'source' | 'destination' | 'stop' | null
@@ -57,7 +105,7 @@ export default function App() {
 	const [potholesByRoute, setPotholesByRoute] = useState({}); // { [routeId]: { loading, error, items: [{ id, coord: [lng,lat], tags }], updatedAt } }
 	// User-reported potholes (persistent in localStorage)
 	const [userReports, setUserReports] = useState([]); // [{id, coord, severity, description, photoDataUrl, routeIdx, createdAt, status, reviewedAt}]
-	const [reportForm, setReportForm] = useState({ coord: null, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null });
+	const [reportForm, setReportForm] = useState({ coord: null, coordSource: null, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
 	const [routeWeather, setRouteWeather] = useState({}); // { [routeId]: { loading, error, points: [ { label, coord, data } ] } }
 	const [ocrMessage, setOcrMessage] = useState(""); // status for overlay OCR fallback
 	const [ocrBusy, setOcrBusy] = useState(false);
@@ -88,6 +136,8 @@ export default function App() {
 	const [bbmpLoaded, setBbmpLoaded] = useState(false); // whether external BBMP dataset layer is added
 	const [bbmpCount, setBbmpCount] = useState(0); // count of loaded BBMP features
 	const bbmpDataRef = useRef(null); // store fetched GeoJSON features
+	// Safety heatmap layer (weighted hazard density over the map)
+	const [safetyHeatmapOn, setSafetyHeatmapOn] = useState(false);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState(null);
@@ -105,7 +155,7 @@ export default function App() {
 	const submitFixProof = () => {
 		if (!fixModal.reportId || !fixPhotoPreview || !fixCoord) return;
 		setUserReports(prev => {
-			const arr = prev.map(r => r.id === fixModal.reportId ? { ...r, pendingFixReview: true, fixProofPhotoDataUrl: fixPhotoPreview, fixProofCoord: fixCoord, fixRequestedAt: Date.now() } : r);
+			const arr = prev.map(r => r.id === fixModal.reportId ? { ...r, status: 'repair-requested', pendingFixReview: true, fixProofPhotoDataUrl: fixPhotoPreview, fixProofCoord: fixCoord, fixRequestedAt: Date.now() } : r);
 			persistReports(arr);
 			return arr;
 		});
@@ -237,27 +287,14 @@ export default function App() {
 					setFixOcrMessage('Getting precise location…');
 					const used = await tryUseBestFix((coord) => setFixCoord(coord), (m) => setFixOcrMessage(m));
 					if (!used) {
-						// Fallback to one-shot + short watch
-						let bestLocal = { coord: null, accuracy: Infinity };
-						await new Promise((resolve) => {
-							navigator.geolocation.getCurrentPosition(
-								(pos) => { const { latitude, longitude, accuracy } = pos.coords; bestLocal = { coord: [longitude, latitude], accuracy: accuracy ?? Infinity }; setFixCoord(bestLocal.coord); resolve(); },
-								() => resolve(),
-								{ enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-							);
+						// Fallback to one-shot + short watch (shared helper)
+						const best = await getBestLocation({
+							onUpdate: ({ coord, message }) => {
+								if (coord) setFixCoord(coord);
+								if (message) setFixOcrMessage(message);
+							},
 						});
-						await new Promise((resolve) => {
-							let localWatchId = null;
-							try {
-								localWatchId = navigator.geolocation.watchPosition(
-									(pos) => { const { latitude, longitude, accuracy } = pos.coords; if (accuracy != null && accuracy < (bestLocal.accuracy || Infinity)) { bestLocal = { coord: [longitude, latitude], accuracy }; setFixCoord(bestLocal.coord); setFixOcrMessage(`Using live location (±${Math.round(accuracy)} m).`); } },
-									() => { },
-									{ enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-								);
-							} catch { }
-							setTimeout(() => { try { if (localWatchId != null) navigator.geolocation.clearWatch(localWatchId); } catch { }; resolve(); }, 3000);
-						});
-						if (!bestLocal.coord) setFixOcrMessage('Live location not available. Please set location manually or upload a geotagged photo.');
+						if (!best?.coord) setFixOcrMessage('Live location not available. Please set location manually or upload a geotagged photo.');
 					}
 				} else {
 					setFixOcrMessage('Live location not supported by this browser.');
@@ -269,29 +306,19 @@ export default function App() {
 				if (navigator.geolocation) {
 					setOcrBusy(true);
 					setOcrMessage('Getting precise location…');
-					const used = await tryUseBestFix((coord) => { setReportForm((f) => ({ ...f, coord })); reportBaseCoordRef.current = coord; }, (m) => setOcrMessage(m));
+					const used = await tryUseBestFix((coord) => { setReportForm((f) => ({ ...f, coord, coordSource: "gps" })); reportBaseCoordRef.current = coord; }, (m) => setOcrMessage(m));
 					if (!used) {
-						let bestLocal = { coord: null, accuracy: Infinity };
-						await new Promise((resolve) => {
-							navigator.geolocation.getCurrentPosition(
-								(pos) => { const { latitude, longitude, accuracy } = pos.coords; bestLocal = { coord: [longitude, latitude], accuracy: accuracy ?? Infinity }; setReportForm((f) => ({ ...f, coord: bestLocal.coord })); reportBaseCoordRef.current = bestLocal.coord; resolve(); },
-								() => resolve(),
-								{ enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-							);
-						});
-						await new Promise((resolve) => {
-							let localWatchId = null;
-							try {
-								localWatchId = navigator.geolocation.watchPosition(
-									(pos) => { const { latitude, longitude, accuracy } = pos.coords; if (accuracy != null && accuracy < (bestLocal.accuracy || Infinity)) { bestLocal = { coord: [longitude, latitude], accuracy }; setReportForm((f) => ({ ...f, coord: bestLocal.coord })); reportBaseCoordRef.current = bestLocal.coord; setOcrMessage(`Using live location (±${Math.round(accuracy)} m).`); } },
-									() => { },
-									{ enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-								);
-							} catch { }
-							setTimeout(() => { try { if (localWatchId != null) navigator.geolocation.clearWatch(localWatchId); } catch { }; resolve(); }, 3000);
+						const best = await getBestLocation({
+							onUpdate: ({ coord, message }) => {
+								if (coord) {
+									setReportForm((f) => ({ ...f, coord, coordSource: "gps" }));
+									reportBaseCoordRef.current = coord;
+								}
+								if (message) setOcrMessage(message);
+							},
 						});
 						setOcrBusy(false);
-						if (!bestLocal.coord) { setOcrMessage('Live location not available. Please set the location on the map.'); setTimeout(() => setLocationOnMapNow(), 0); }
+						if (!best?.coord) { setOcrMessage('Live location not available. Please set the location on the map.'); setTimeout(() => setLocationOnMapNow(), 0); }
 					} else {
 						setOcrBusy(false);
 					}
@@ -368,7 +395,7 @@ export default function App() {
 		}
 		const c = map.getCenter();
 		const coord = [c.lng, c.lat];
-		setReportForm((f) => ({ ...f, coord }));
+		setReportForm((f) => ({ ...f, coord, coordSource: "map-pick" }));
 		reportBaseCoordRef.current = coord;
 		setTimeout(() => startReportAdjust(), 0);
 		setNotice({ type: 'info', message: 'Drag the blue marker to the exact location.' });
@@ -384,46 +411,60 @@ export default function App() {
 		}
 		setOcrBusy(true);
 		setOcrMessage('Retrying to get live location…');
-		let bestLocal = { coord: null, accuracy: Infinity };
-		await new Promise((resolve) => {
-			navigator.geolocation.getCurrentPosition(
-				(pos) => {
-					const { latitude, longitude, accuracy } = pos.coords;
-					bestLocal = { coord: [longitude, latitude], accuracy: accuracy ?? Infinity };
-					setReportForm((f) => ({ ...f, coord: bestLocal.coord }));
-					reportBaseCoordRef.current = bestLocal.coord;
-					resolve();
-				},
-				() => resolve(),
-				{ enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-			);
-		});
-		await new Promise((resolve) => {
-			let localWatchId = null;
-			try {
-				localWatchId = navigator.geolocation.watchPosition(
-					(pos) => {
-						const { latitude, longitude, accuracy } = pos.coords;
-						if (accuracy != null && accuracy < (bestLocal.accuracy || Infinity)) {
-							bestLocal = { coord: [longitude, latitude], accuracy };
-							setReportForm((f) => ({ ...f, coord: bestLocal.coord }));
-							reportBaseCoordRef.current = bestLocal.coord;
-							setOcrMessage(`Using live location (±${Math.round(accuracy)} m).`);
-						}
-					},
-					() => { },
-					{ enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
-				);
-			} catch { }
-			setTimeout(() => {
-				try { if (localWatchId != null) navigator.geolocation.clearWatch(localWatchId); } catch { }
-				resolve();
-			}, 3000);
+		const best = await getBestLocation({
+			onUpdate: ({ coord, message }) => {
+				if (coord) {
+					setReportForm((f) => ({ ...f, coord, coordSource: "gps" }));
+					reportBaseCoordRef.current = coord;
+				}
+				if (message) setOcrMessage(message);
+			},
 		});
 		setOcrBusy(false);
-		if (!bestLocal.coord) {
+		if (!best?.coord) {
 			setNotice({ type: 'warn', message: 'Live location unavailable. Set the point on the map.' });
 			setTimeout(() => setNotice(null), 3500);
+		}
+	};
+
+	// Shared image pipeline for report + fix-proof uploads
+	// (downscale → EXIF GPS → OCR fallback → coordinate validation)
+	const handleImageSelected = async (file, target = 'report') => {
+		if (!file) return;
+		const isFix = target === 'fix';
+		const setStatus = isFix ? setFixOcrMessage : setOcrMessage;
+		if (!isFix) setOcrBusy(true);
+		const originalUrl = await new Promise((resolve) => {
+			const reader = new FileReader();
+			reader.onload = (ev) => resolve(ev.target.result);
+			reader.onerror = () => resolve(null);
+			reader.readAsDataURL(file);
+		});
+		if (!originalUrl) {
+			setStatus("Couldn't load image for OCR.");
+			if (!isFix) setOcrBusy(false);
+			return;
+		}
+		const scaledUrl = await downscaleImage(originalUrl);
+		if (isFix) {
+			setFixPhotoPreview(scaledUrl);
+		} else {
+			setReportForm((f) => ({ ...f, photoPreview: scaledUrl, photoSource: 'upload' }));
+		}
+		const res = await processImageCoordinates(file, scaledUrl, { onStatus: setStatus, extractDate: !isFix });
+		if (isFix) {
+			setFixCoord(res.coord);
+		} else {
+			// Optional assistive detection — only a registered "ai" detector's
+			// result is kept; the bundled rule-based stub never fabricates one.
+			let detection = null;
+			try {
+				const det = await detectPothole(scaledUrl);
+				if (det.detector.kind === "ai") detection = det;
+			} catch { /* detection is optional */ }
+			setReportForm((f) => ({ ...f, coord: res.coord, coordSource: res.source && res.source !== "none" ? res.source : null, detection }));
+			if (res.capturedAt) setReportForm((f) => ({ ...f, captureAt: res.capturedAt }));
+			setOcrBusy(false);
 		}
 	};
 	// Keep markers for user-reported potholes (global)
@@ -478,8 +519,11 @@ export default function App() {
 				try { if (openWeatherId != null) renderWeatherMarkersFor(openWeatherId); } catch { }
 				// Ensure stop markers reappear after style change
 				try { renderStopMarkers(); } catch { }
+				try { renderIncidentMarkers(); } catch { }
 				// Re-add BBMP layer if previously loaded
 				try { if (bbmpLoaded) addBbmpLayer(); } catch { }
+				// Re-add safety heatmap if it was on
+				try { if (safetyHeatmapOn) renderSafetyHeatmap(); } catch { }
 			});
 		} catch (e) {
 			setNotice({ type: 'error', message: 'Failed to switch map style: ' + (e.message || e) });
@@ -525,66 +569,9 @@ export default function App() {
 
 	const formatCoordLabel = (lng, lat) => `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 
-	// Geometry helpers for distance of a point to a route (polyline) in meters
-	const lonLatToMeters = (lng, lat) => {
-		// Web Mercator projection (approx meters)
-		const x = (lng * Math.PI * 6378137) / 180;
-		const y =
-			Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * 6378137;
-		return [x, y];
-	};
-
-	const pointSegDistMeters = (p, a, b) => {
-		const [px, py] = lonLatToMeters(p[0], p[1]);
-		const [ax, ay] = lonLatToMeters(a[0], a[1]);
-		const [bx, by] = lonLatToMeters(b[0], b[1]);
-		const vx = bx - ax, vy = by - ay;
-		const wx = px - ax, wy = py - ay;
-		const segLen2 = vx * vx + vy * vy;
-		let t = segLen2 > 0 ? (wx * vx + wy * vy) / segLen2 : 0;
-		if (t < 0) t = 0; else if (t > 1) t = 1;
-		const cx = ax + t * vx, cy = ay + t * vy;
-		const dx = px - cx, dy = py - cy;
-		return Math.sqrt(dx * dx + dy * dy);
-	};
-
-	const pointLineDistMeters = (point, lineCoords) => {
-		if (!Array.isArray(lineCoords) || lineCoords.length < 2) return Infinity;
-		let minD = Infinity;
-		for (let i = 0; i < lineCoords.length - 1; i += 1) {
-			const a = lineCoords[i];
-			const b = lineCoords[i + 1];
-			const d = pointSegDistMeters(point, a, b);
-			if (d < minD) minD = d;
-		}
-		return minD;
-	};
-
-	// Quick distance between two [lng,lat] points in meters using Web Mercator approximation
-	const distMeters = (a, b) => {
-		if (!Array.isArray(a) || !Array.isArray(b)) return Infinity;
-		const [ax, ay] = lonLatToMeters(a[0], a[1]);
-		const [bx, by] = lonLatToMeters(b[0], b[1]);
-		const dx = ax - bx, dy = ay - by;
-		return Math.sqrt(dx * dx + dy * dy);
-	};
-
-	const computeUserPotholeCountForRoute = (route, reports, { showFixed, adminMode }, thresholdMeters = 120) => {
-		if (!route?.geometry?.coordinates?.length || !Array.isArray(reports)) return 0;
-		const coords = route.geometry.coordinates;
-		let count = 0;
-		for (const rep of reports) {
-			if (!Array.isArray(rep?.coord)) continue;
-			// apply same visibility rules as map markers
-			if (rep.hiddenGlobally) continue;
-			if (rep.status === 'rejected') continue;
-			if (rep.hiddenForUser && !adminMode) continue;
-			if (rep.status === 'fixed' && !showFixed) continue;
-			const d = pointLineDistMeters(rep.coord, coords);
-			if (isFinite(d) && d <= thresholdMeters) count += 1;
-		}
-		return count;
-	};
+	// Geo helpers and report proximity rules now live in utils/geo + utils/routeAnalysis
+	const computeUserPotholeCountForRoute = (route, reports, opts, thresholdMeters = 120) =>
+		collectRouteReports(route, reports, opts, thresholdMeters).count;
 
 	// Count avoidance hazards near a route: high severity & confirmed, plus optionally high severity unverified if enabled
 	// Avoidance hazard computation removed for now
@@ -640,7 +627,7 @@ export default function App() {
 			// eslint-disable-next-line no-underscore-dangle
 			window._mapInstance = map;
 			// Ensure any pre-existing stops are drawn once the style loads
-			try { map.on('load', () => { try { renderStopMarkers(); } catch { } }); } catch { }
+			try { map.on('load', () => { try { renderStopMarkers(); } catch { } try { renderSafetyHeatmap(); } catch { } }); } catch { }
 			// Attempt to start live location watch so user marker is always shown (permission based)
 			if (navigator.geolocation) {
 				// Wrap permission check in an async IIFE without making effect async
@@ -882,6 +869,95 @@ export default function App() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [routes, userReports, showFixed, adminMode]);
 
+	// Build the factual incident list per route (congestion + reports + optional feed)
+	const routeIncidentResults = useMemo(() => {
+		if (!routes?.length) return [];
+		return routes.map((r, i) =>
+			buildRouteIncidents(r, {
+				congestionSegments: trafficByRoute?.[i]?.congestionSegments || [],
+				congestionAvailable: Array.isArray(trafficByRoute?.[i]?.congestionSegments),
+				reports: userReports,
+				showFixed,
+				adminMode,
+				external: externalIncidents,
+			})
+		);
+	}, [routes, trafficByRoute, userReports, showFixed, adminMode, externalIncidents]);
+
+	// Per-route safety analysis for multi-route comparison (deterministic, data-driven)
+	const routeAnalyses = useMemo(() => {
+		const incidentsByIndex = routeIncidentResults.map((r) => r.incidents);
+		return analyzeRoutes(routes, {
+			reports: userReports,
+			showFixed,
+			adminMode,
+			trafficByRoute,
+			routeWeather,
+			// Incident factor is known from real sources; accident risk only counts
+			// when an accident-capable source (external feed) exists.
+			incidentsByRoute: routes?.length ? incidentsByIndex : null,
+			accidentsAvailable: externalIncidents.available,
+		});
+	}, [routes, userReports, showFixed, adminMode, trafficByRoute, routeWeather, routeIncidentResults, externalIncidents]);
+
+	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes
+	const recommendation = useMemo(() => recommendRoute(routeAnalyses), [routeAnalyses]);
+
+	// Data-driven explanations for the recommendation (only real metric differences)
+	const recommendationReasons = useMemo(() => buildRecommendationReasons(routeAnalyses, recommendation), [routeAnalyses, recommendation]);
+
+	// Route-aware hazard alerts for the currently selected route
+	const selectedRouteCoords =
+		selectedRouteId != null && routes?.[Number(selectedRouteId)]?.geometry?.coordinates
+			? routes[Number(selectedRouteId)].geometry.coordinates
+			: null;
+	const hazardAlerts = useHazardAlerts({
+		userCoord,
+		routeCoords: selectedRouteCoords,
+		incidents: selectedRouteId != null && routeIncidentResults?.length
+			? routeIncidentResults[Number(selectedRouteId)]?.incidents || []
+			: null,
+		enabled: routes?.length > 0,
+	});
+
+	// Voice settings (optional, persisted; both channels opt-in)
+	const [voiceSettings, setVoiceSettings] = useState(() => loadVoiceSettings());
+	useEffect(() => { saveVoiceSettings(voiceSettings); }, [voiceSettings]);
+	const announcedStepsRef = useRef(new Set());
+	const spokenAlertsRef = useRef(new Set());
+	useEffect(() => {
+		announcedStepsRef.current = new Set();
+		spokenAlertsRef.current = new Set();
+	}, [selectedRouteId]); // fresh route → fresh announcements
+
+	// Speak upcoming turn-by-turn maneuvers while navigation voice is enabled
+	useEffect(() => {
+		if (!voiceSettings.navigation || !isSpeechSupported() || !userCoord || !selectedRouteCoords || selectedRouteId == null) return;
+		const route = routes?.[Number(selectedRouteId)];
+		const steps = Array.isArray(route?.legs) ? route.legs.flatMap((l) => l?.steps || []) : [];
+		if (!steps.length) return;
+		const ann = pickNextStepAnnouncement({
+			routeCoords: selectedRouteCoords,
+			steps,
+			userCoord,
+			announcedSet: announcedStepsRef.current,
+		});
+		if (ann) {
+			announcedStepsRef.current.add(ann.key);
+			speakNavigationInstruction(ann.text);
+		}
+	}, [userCoord, selectedRouteCoords, selectedRouteId, voiceSettings.navigation, routes]);
+
+	// Speak new hazard alerts while safety warnings are enabled
+	useEffect(() => {
+		if (!voiceSettings.safety || !isSpeechSupported()) return;
+		for (const a of hazardAlerts.alerts) {
+			if (spokenAlertsRef.current.has(a.key)) continue;
+			spokenAlertsRef.current.add(a.key);
+			speakSafetyWarning(`${a.title}. ${a.message}.`);
+		}
+	}, [hazardAlerts.alerts, voiceSettings.safety]);
+
 	// Avoidance metrics removed
 
 	const getRoutes = async () => {
@@ -925,9 +1001,12 @@ export default function App() {
 				routesData.forEach((r, i) => { const d = r?.duration ?? Number.MAX_SAFE_INTEGER; if (d < bestDur) { bestDur = d; primaryId = i; } });
 			} catch { }
 			setSelectedRouteId(String(primaryId));
+			setRecChoice(null); // fresh routes → fresh recommendation offer
 			drawRoutesOnMap(map, routesData, primaryId);
 			// re-render user-reported markers after route change
 			renderUserPotholeMarkers();
+			// Pull live traffic for every alternative so all routes get a full analysis
+			routesData.forEach((_, i) => { try { fetchTrafficForRoute(i); } catch { } });
 		} catch (e) {
 			setMapError(e.message || "Failed to fetch routes");
 		}
@@ -1226,7 +1305,7 @@ export default function App() {
 			} catch { }
 			setTrafficByRoute((p) => ({
 				...p,
-				[idx]: { loading: false, error: null, points: pts, liveMinutes, freeMinutes, updatedAt: Date.now() },
+				[idx]: { loading: false, error: null, points: pts, liveMinutes, freeMinutes, updatedAt: Date.now(), congestionSegments: congFeatures },
 			}));
 			// If this traffic belongs to the currently selected route, draw congestion overlay
 			if (String(idx) === String(selectedRouteId) && congFeatures.length) {
@@ -1330,7 +1409,7 @@ export default function App() {
 				// Backfill missing fields for older entries
 				const normalized = parsed.map((r) => ({
 					...r,
-					status: r.status || "unverified",
+					status: normalizeStatus(r.status), // migrates legacy "unverified"/"confirmed"
 					reviewedAt: r.reviewedAt || null,
 					hiddenForUser: Boolean(r.hiddenForUser) || false,
 					pendingRemoval: Boolean(r.pendingRemoval) || false,
@@ -1340,6 +1419,8 @@ export default function App() {
 					fixProofCoord: r.fixProofCoord || null,
 					fixRequestedAt: r.fixRequestedAt || null,
 					reportedToBBMP: Boolean(r.reportedToBBMP) || false,
+					coordSource: r.coordSource || null,
+					detection: r.detection || null,
 				}));
 				setUserReports(normalized);
 			}
@@ -1402,7 +1483,7 @@ export default function App() {
 			media_url: r.photoDataUrl || null,
 			created_at: r.captureAt || r.createdAt,
 			severity: r.severity,
-			status: r.status || 'unverified',
+			status: normalizeStatus(r.status),
 			source: 'STARS App'
 		}));
 		try {
@@ -1444,6 +1525,41 @@ export default function App() {
 			}
 		} catch { }
 	};
+
+	// Safety heatmap: weighted density of active hazards (severity × recency)
+	const renderSafetyHeatmap = () => {
+		const map = window._mapInstance; if (!map) return;
+		try { if (map.getLayer('safety-heatmap')) map.removeLayer('safety-heatmap'); } catch { }
+		try { if (map.getSource('safety-heatmap')) map.removeSource('safety-heatmap'); } catch { }
+		if (!safetyHeatmapOn) return;
+		const data = buildSafetyHeatmapData(userReports, { includeFixed: showFixed });
+		if (!data.features.length) return; // nothing to show; keep layer absent
+		map.addSource('safety-heatmap', { type: 'geojson', data });
+		const layer = {
+			id: 'safety-heatmap',
+			type: 'heatmap',
+			source: 'safety-heatmap',
+			paint: {
+				'heatmap-weight': ['get', 'weight'],
+				'heatmap-intensity': 1,
+				'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 14, 14, 34, 18, 50],
+				'heatmap-opacity': 0.78,
+				'heatmap-color': [
+					'interpolate', ['linear'], ['heatmap-density'],
+					0, 'rgba(34,197,94,0)',
+					0.2, 'rgba(34,197,94,0.55)',
+					0.45, 'rgba(250,204,21,0.7)',
+					0.7, 'rgba(249,115,22,0.85)',
+					1, 'rgba(220,38,38,0.95)',
+				],
+			},
+		};
+		// Keep routes and traffic overlays drawn above the heatmap
+		const below = ['routes-alt', 'route-primary', 'congestion-overlay', 'bbmp_potholes_layer'].find((id) => map.getLayer(id));
+		try { if (below) map.addLayer(layer, below); else map.addLayer(layer); } catch { }
+	};
+
+	useEffect(() => { renderSafetyHeatmap(); }, [safetyHeatmapOn, userReports, showFixed]);
 
 	const loadBBMPData = async () => {
 		const map = window._mapInstance;
@@ -1530,6 +1646,22 @@ export default function App() {
 		});
 	};
 
+	// Lifecycle transition helper (admin)
+	const setReportStatus = (id, newStatus) => {
+		const status = normalizeStatus(newStatus);
+		setUserReports((prev) => {
+			const arr = prev.map((x) => x.id === id ? {
+				...x,
+				status,
+				reviewedAt: Date.now(),
+				...(status === 'fixed' || status === 'rejected' ? { pendingFixReview: false } : {}),
+				...(status === 'reported' ? { hiddenGlobally: false, rejectionReason: null } : {}),
+			} : x);
+			persistReports(arr);
+			return arr;
+		});
+	};
+
 	// Allow user to edit severity level of their report
 	const updateReportSeverity = (id, newLevel) => {
 		const allowed = ['low', 'moderate', 'high'];
@@ -1550,18 +1682,26 @@ export default function App() {
 		userPotholePopupsRef.current.forEach((p) => { try { p.remove(); } catch { } });
 		userPotholeMarkersRef.current = [];
 		userPotholePopupsRef.current = [];
-		for (const rep of userReports) {
-			// Skip reports that were hidden globally (e.g., admin rejected)
-			if (rep.hiddenGlobally) continue;
-			// Also skip explicit rejected status to be safe with older entries
-			if (rep.status === 'rejected') continue;
-			// Hide reports locally if user requested deletion (unless in admin mode)
-			if (rep.hiddenForUser && !adminMode) continue;
-			// Admin filter: hide fixed if toggled off
-			if (rep.status === 'fixed' && !showFixed) continue;
-			// Admin filter: show only unverified when enabled
-			if (adminMode && showOnlyUnverified && (rep.status || 'unverified') !== 'unverified') continue;
-			const el = document.createElement("div");
+	// Group nearby reports into hazard clusters (individual reports are preserved;
+	// the marker shows one pin per location instead of one pin per duplicate)
+	const visibleReports = userReports.filter((rep) => {
+		if (!Array.isArray(rep?.coord)) return false;
+		if (rep.hiddenGlobally) return false;
+		if (rep.status === 'rejected') return false;
+		if (rep.hiddenForUser && !adminMode) return false;
+		if (rep.status === 'fixed' && !showFixed) return false;
+		if (adminMode && showOnlyUnverified && normalizeStatus(rep.status) !== 'reported') return false;
+		return true;
+	});
+	const reportClusters = clusterReports(visibleReports, { thresholdMeters: CLUSTER_THRESHOLD_METERS });
+	for (const cluster of reportClusters) {
+		// Representative report = most recent in the cluster; every member stays intact
+		const rep = cluster.reports.reduce(
+			(m, r) => (((r.captureAt || r.createdAt || 0) >= (m.captureAt || m.createdAt || 0)) ? r : m),
+			cluster.reports[0]
+		);
+		const clusterIds = cluster.reports.map((r) => r.id);
+		const el = document.createElement("div");
 			el.style.width = "36px";
 			el.style.height = "36px";
 			el.style.display = "flex";
@@ -1571,25 +1711,32 @@ export default function App() {
 			el.style.transform = "translateY(-6px)";
 			el.title = `${rep.severity} pothole: ${rep.description}`;
 			const img = document.createElement("img");
-			img.src = rep.severity === "high" ? highIcon : rep.severity === "moderate" ? moderateIcon : lowIcon;
-			img.alt = `${rep.severity} pothole`;
+			img.src = cluster.severity === "high" ? highIcon : cluster.severity === "moderate" ? moderateIcon : lowIcon;
+			img.alt = `${cluster.severity} pothole${cluster.count > 1 ? ` (${cluster.count} reports)` : ""}`;
 			img.style.width = "100%";
 			img.style.height = "100%";
 			img.style.objectFit = "contain";
 			img.style.filter = "drop-shadow(0 4px 8px rgba(0,0,0,0.4))";
 			el.appendChild(img);
 			// Visual ring by status
-			if (rep.status === 'confirmed') {
+			const ringStatus = normalizeStatus(rep.status);
+			if (ringStatus === 'verified') {
 				el.style.border = '2px solid #10b981';
 				el.style.borderRadius = '9999px';
-			} else if (rep.status === 'fixed') {
+			} else if (ringStatus === 'repair-requested') {
+				el.style.border = '2px solid #7c3aed';
+				el.style.borderRadius = '9999px';
+			} else if (ringStatus === 'under-review') {
+				el.style.border = '2px solid #3b82f6';
+				el.style.borderRadius = '9999px';
+			} else if (ringStatus === 'fixed') {
 				el.style.border = '2px solid #9ca3af';
 				el.style.borderRadius = '9999px';
 			} else {
 				el.style.border = '2px solid #f59e0b';
 				el.style.borderRadius = '9999px';
 			}
-			const mk = new mapboxgl.Marker({ element: el, anchor: "bottom" }).setLngLat(rep.coord).addTo(map);
+			const mk = new mapboxgl.Marker({ element: el, anchor: "bottom" }).setLngLat(cluster.coord).addTo(map);
 			// Click to open popup with photo and date
 			el.addEventListener("click", (ev) => {
 				// Prevent map click from immediately closing the popup
@@ -1603,6 +1750,7 @@ export default function App() {
 				wrap.style.fontSize = "12px";
 				wrap.style.color = "#111827";
 				// Build safe metadata block (severity, date, status, coordinates, description)
+				const repConfidence = assessReportConfidence(cluster.reports);
 				const meta = document.createElement("div");
 				meta.style.marginTop = "6px";
 				const displayedTs = rep.captureAt || rep.createdAt;
@@ -1611,17 +1759,16 @@ export default function App() {
 				const lng = Array.isArray(rep.coord) ? Number(rep.coord[0]) : NaN;
 				const lat = Array.isArray(rep.coord) ? Number(rep.coord[1]) : NaN;
 				const coordLine = (isFinite(lat) && isFinite(lng)) ? `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}` : "";
-				const safeDesc = (rep.description || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-				const statusBadge = (() => {
-					const s = rep.status || 'unverified';
-					const baseStyle = 'display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.5px;margin-top:4px;';
-					if (s === 'confirmed') return `<span style="${baseStyle}background:#064e3b;color:#ecfdf5;">CONFIRMED</span>`;
-					if (s === 'fixed') return `<span style="${baseStyle}background:#1e3a8a;color:#dbeafe;">FIXED</span>`;
-					return `<span style="${baseStyle}background:#7c2d12;color:#ffedd5;">UNVERIFIED</span>`;
-				})();
+				const safeDesc = (rep.description || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");						const statusBadge = (() => {
+							const st = normalizeStatus(rep.status);
+							const sty = STATUS_STYLES[st] || STATUS_STYLES.reported;
+							const baseStyle = 'display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.5px;margin-top:4px;';
+							return `<span style="${baseStyle}background:${sty.bg};color:${sty.text};">${(STATUS_LABELS[st] || 'Reported').toUpperCase()}</span>`;
+						})();
 				meta.innerHTML = `
 					<div><strong>${sev}</strong> • ${createdAt}</div>
 					${statusBadge}
+					<div style="margin-top:4px;font-size:10px;font-weight:600;color:#374151;">System confidence: ${repConfidence.level} (${repConfidence.score}/100)</div>
 					${rep.reportedToBBMP ? '<div style="margin-top:4px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#312e81;color:#c7d2fe;">Reported to BBMP</div>' : ''}
 					${coordLine ? `<div style="color:#4b5563;font-size:11px;margin-top:2px;">${coordLine}</div>` : ""}
 					${safeDesc ? `<div style=\"color:#6b7280;margin-top:4px;\">${safeDesc}</div>` : ""}
@@ -1642,6 +1789,14 @@ export default function App() {
 					photo.addEventListener('click', (e) => { e.stopPropagation?.(); e.preventDefault?.(); try { openImageModal(rep.photoDataUrl, `Reported photo • ${new Date(rep.captureAt || rep.createdAt).toLocaleString()}`); } catch { } });
 					wrap.appendChild(photo);
 				}
+				// Cluster summary — duplicates are grouped here, original reports stay intact
+				if (cluster.count > 1) {
+					const clusterConfidence = assessReportConfidence(cluster.reports);
+					const clusterInfo = document.createElement('div');
+					clusterInfo.style.cssText = 'margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#fff7ed;border:1px solid #fed7aa;';
+					clusterInfo.innerHTML = `<div style="font-weight:700;font-size:12px;color:#9a3412;">POTHOLE CLUSTER</div><div style="font-size:11px;color:#7c2d12;">${cluster.count} reports · Severity: ${String(cluster.severity).toUpperCase()}</div><div style="font-size:11px;color:#7c2d12;margin-top:2px;">System confidence: ${clusterConfidence.level} (${clusterConfidence.score}/100)</div>`;
+					wrap.appendChild(clusterInfo);
+				}
 				wrap.appendChild(meta);
 				// Add an explicit close button inside popup content
 				const closeBtn = document.createElement("button");
@@ -1654,11 +1809,10 @@ export default function App() {
 				closeBtn.style.background = "#f9fafb";
 				closeBtn.style.color = "#111827";
 				closeBtn.style.cursor = "pointer";
-				wrap.appendChild(closeBtn);
-				const popup = new mapboxgl.Popup({ offset: 10, closeOnClick: false, closeButton: true })
-					.setDOMContent(wrap)
-					.setLngLat(rep.coord)
-					.addTo(map);
+				wrap.appendChild(closeBtn);						const popup = new mapboxgl.Popup({ offset: 10, closeOnClick: false, closeButton: true })
+							.setDOMContent(wrap)
+							.setLngLat(cluster.coord)
+							.addTo(map);
 				closeBtn.addEventListener("click", (e) => { e?.stopPropagation?.(); e?.preventDefault?.(); try { popup.remove(); } catch { } });
 				// Admin controls (inline) if adminMode
 				if (adminMode) {
@@ -1680,7 +1834,7 @@ export default function App() {
 						b.addEventListener('click', (ev2) => {
 							ev2.stopPropagation(); ev2.preventDefault();
 							setUserReports((prev) => {
-								const arr = prev.map((r2) => r2.id === rep.id ? { ...r2, status: newStatus, reviewedAt: Date.now() } : r2);
+								const arr = prev.map((r2) => clusterIds.includes(r2.id) ? { ...r2, status: newStatus, reviewedAt: Date.now() } : r2);
 								persistReports(arr);
 								return arr;
 							});
@@ -1689,13 +1843,13 @@ export default function App() {
 						});
 						return b;
 					};
-					adminBar.appendChild(mkBtn('Mark Confirmed', 'confirmed', '#bfdbfe'));
+					adminBar.appendChild(mkBtn('Verify', 'verified', '#bfdbfe'));
 					const fixedBtn = mkBtn('Mark Fixed', 'fixed', '#c7d2fe');
 					fixedBtn.addEventListener('click', (ev2) => {
 						ev2.stopPropagation(); ev2.preventDefault();
 						// Also clear pendingFixReview flag when admin marks fixed from popup
 						setUserReports((prev) => {
-							const arr = prev.map((r2) => r2.id === rep.id ? { ...r2, status: 'fixed', reviewedAt: Date.now(), pendingFixReview: false } : r2);
+							const arr = prev.map((r2) => clusterIds.includes(r2.id) ? { ...r2, status: 'fixed', reviewedAt: Date.now(), pendingFixReview: false } : r2);
 							persistReports(arr);
 							return arr;
 						});
@@ -1716,7 +1870,7 @@ export default function App() {
 						viewBtn.addEventListener('click', (ev2) => { ev2.stopPropagation(); ev2.preventDefault(); try { openImageModal(rep.fixProofPhotoDataUrl, `Fix proof for report ${rep.id}`); } catch { } });
 						adminBar.appendChild(viewBtn);
 					}
-					// Reset button to revert to unverified and clear moderation flags
+					// Reset button to revert to reported and clear moderation flags
 					const resetBtn = document.createElement('button');
 					resetBtn.textContent = 'Reset';
 					resetBtn.style.fontSize = '10px';
@@ -1729,7 +1883,7 @@ export default function App() {
 					resetBtn.addEventListener('click', (ev2) => {
 						ev2.stopPropagation(); ev2.preventDefault();
 						setUserReports((prev) => {
-							const arr = prev.map((r2) => r2.id === rep.id ? { ...r2, status: 'unverified', reviewedAt: null, pendingFixReview: false, hiddenGlobally: false, rejectionReason: null } : r2);
+							const arr = prev.map((r2) => clusterIds.includes(r2.id) ? { ...r2, status: 'reported', reviewedAt: null, pendingFixReview: false, hiddenGlobally: false, rejectionReason: null } : r2);
 							persistReports(arr);
 							return arr;
 						});
@@ -1743,7 +1897,7 @@ export default function App() {
 					bbmpBtn.style.fontSize = '10px'; bbmpBtn.style.padding = '4px 6px'; bbmpBtn.style.borderRadius = '4px'; bbmpBtn.style.border = '1px solid #d1d5db'; bbmpBtn.style.cursor = 'pointer'; bbmpBtn.style.background = rep.reportedToBBMP ? '#1e3a8a' : '#eef2ff'; bbmpBtn.style.color = rep.reportedToBBMP ? '#f8fafc' : '#111827';
 					bbmpBtn.addEventListener('click', (ev2) => {
 						ev2.stopPropagation(); ev2.preventDefault();
-						setUserReports(prev => { const arr = prev.map(r2 => r2.id === rep.id ? { ...r2, reportedToBBMP: !r2.reportedToBBMP } : r2); persistReports(arr); return arr; });
+						setUserReports(prev => { const arr = prev.map(r2 => clusterIds.includes(r2.id) ? { ...r2, reportedToBBMP: !r2.reportedToBBMP } : r2); persistReports(arr); return arr; });
 						setTimeout(() => { renderUserPotholeMarkers(); }, 50);
 					});
 					adminBar.appendChild(bbmpBtn);
@@ -1933,6 +2087,65 @@ export default function App() {
 
 	useEffect(() => { renderUserPotholeMarkers(); }, [userReports, showFixed, adminMode]);
 
+	// --- Incident markers for the selected route ---
+	const renderIncidentMarkers = () => {
+		const map = window._mapInstance;
+		if (!map) return;
+		incidentMarkersRef.current.forEach((m) => { try { m.remove(); } catch { } });
+		incidentPopupsRef.current.forEach((p) => { try { p.remove(); } catch { } });
+		incidentMarkersRef.current = [];
+		incidentPopupsRef.current = [];
+		if (selectedRouteId == null || !routeIncidentResults?.length) return;
+		const list = routeIncidentResults[Number(selectedRouteId)]?.incidents || [];
+		const SEV_COLOR = { low: '#eab308', medium: '#f59e0b', high: '#ef4444', critical: '#7f1d1d' };
+		for (const inc of list) {
+			if (!Array.isArray(inc.coord)) continue;
+			const el = document.createElement('div');
+			el.style.width = '20px';
+			el.style.height = '20px';
+			el.style.borderRadius = '50%';
+			el.style.background = SEV_COLOR[inc.severity] || '#f59e0b';
+			el.style.border = '2px solid #fff';
+			el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.45)';
+			el.style.display = 'flex';
+			el.style.alignItems = 'center';
+			el.style.justifyContent = 'center';
+			el.style.fontSize = '11px';
+			el.style.cursor = 'pointer';
+			el.textContent = '⚠';
+			el.title = `${INCIDENT_TYPE_LABELS[inc.type] || 'Incident'} (${inc.severity})`;
+			el.setAttribute('role', 'img');
+			el.setAttribute('aria-label', el.title);
+			el.addEventListener('click', (ev) => {
+				try { ev.stopPropagation?.(); } catch { }
+				incidentPopupsRef.current.forEach((p) => { try { p.remove(); } catch { } });
+				incidentPopupsRef.current = [];
+				const wrap = document.createElement('div');
+				wrap.style.maxWidth = '240px';
+				wrap.style.fontSize = '12px';
+				wrap.style.color = '#111827';
+				const sev = String(inc.severity || '').toUpperCase();
+				const locText = `${inc.coord[1].toFixed(5)}, ${inc.coord[0].toFixed(5)}`;
+				const distText = inc.distanceFromRouteMeters === 0 ? 'on route' : `~${inc.distanceFromRouteMeters} m from route`;
+				const safeDesc = String(inc.description || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+				wrap.innerHTML = `
+					<div style="font-weight:700;">${INCIDENT_TYPE_LABELS[inc.type] || 'Incident'} · <span style="color:${SEV_COLOR[inc.severity] || '#f59e0b'};">${sev}</span></div>
+					<div style="color:#4b5563;font-size:11px;margin-top:2px;">📍 ${locText} (${distText})</div>
+					<div style="margin-top:4px;">${safeDesc}</div>`;
+				const popup = new mapboxgl.Popup({ offset: 10, closeButton: true })
+					.setDOMContent(wrap)
+					.setLngLat(inc.coord)
+					.addTo(map);
+				incidentPopupsRef.current.push(popup);
+			});
+			const mk = new mapboxgl.Marker({ element: el, anchor: 'center' }).setLngLat(inc.coord).addTo(map);
+			incidentMarkersRef.current.push(mk);
+		}
+	};
+
+	// Refresh incident markers when selection, incidents or underlying data change
+	useEffect(() => { renderIncidentMarkers(); }, [selectedRouteId, routeIncidentResults]);
+
 	// Removed manual map picking for user reports; coordinates will be extracted from photo EXIF geotag.
 
 	const submitPotholeReport = () => {
@@ -1946,7 +2159,9 @@ export default function App() {
 			captureAt: reportForm.captureAt || Date.now(), // fallback to upload time if capture time missing
 			routeIdx: selectedRouteId,
 			createdAt: Date.now(),
-			status: "unverified", // admin can mark: unverified | confirmed | fixed
+			status: "reported", // lifecycle: reported → under review → verified → repair requested → fixed (or rejected)
+			coordSource: reportForm.coordSource || null, // gps | exif | ocr | map-pick (feeds system confidence)
+			detection: reportForm.detection || null, // assistive model result (null unless a real detector is registered)
 			reviewedAt: null,
 			hiddenForUser: false,
 			pendingRemoval: false,
@@ -1963,7 +2178,7 @@ export default function App() {
 			return arr;
 		});
 		// reset form
-		setReportForm({ coord: null, severity: "moderate", description: "", photoPreview: null, captureAt: null });
+		setReportForm({ coord: null, coordSource: null, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
 		// no map picking to disable
 	};
 
@@ -2097,12 +2312,38 @@ export default function App() {
 				<div className="max-w-7xl mx-auto px-6 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
 					<div className={`px-4 py-3 text-sm rounded-xl shadow-lg backdrop-blur-sm flex items-center justify-between ${notice.type === 'success' ? 'bg-green-100/90 border-2 border-green-300 text-green-900 dark:bg-green-900/40 dark:border-green-700 dark:text-green-200' : notice.type === 'warn' ? 'bg-yellow-100/90 border-2 border-yellow-300 text-yellow-900 dark:bg-yellow-900/40 dark:border-yellow-700 dark:text-yellow-200' : notice.type === 'error' ? 'bg-red-100/90 border-2 border-red-300 text-red-900 dark:bg-red-900/40 dark:border-red-700 dark:text-red-200' : 'bg-blue-100/90 border-2 border-blue-300 text-blue-900 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-200'}`}>
 						<span>{notice.message}</span>
-						{notice.undoId && (
-							<button onClick={() => undoDeleteRequest(notice.undoId)} className="ml-4 text-xs underline hover:opacity-80">Undo</button>
-						)}
-					</div>
+					{notice.undoId && (
+						<button onClick={() => undoDeleteRequest(notice.undoId)} className="ml-4 text-xs underline hover:opacity-80">Undo</button>
+					)}
 				</div>
-			)}
+			</div>
+		)}
+
+		{/* Route hazard alerts — auto-managed with throttling, dismissible */}
+		{hazardAlerts.alerts.length > 0 && (
+			<div className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] w-[min(94vw,460px)] space-y-2" aria-live="assertive" aria-label="Route hazard alerts">
+				{hazardAlerts.alerts.map((a) => {
+					const critical = a.severity === "critical" || a.title === "ROAD CLOSURE" || a.title === "ACCIDENT";
+					return (
+						<div key={a.key} role="alert" className={`rounded-xl shadow-2xl border-2 px-4 py-3 flex items-start gap-3 backdrop-blur-md ${critical ? "bg-red-50/95 border-red-400 text-red-900 dark:bg-red-950/90 dark:border-red-700 dark:text-red-100" : "bg-amber-50/95 border-amber-400 text-amber-900 dark:bg-amber-950/90 dark:border-amber-600 dark:text-amber-100"}`}>
+							<AlertTriangle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${critical ? "text-red-600" : "text-amber-600"}`} aria-hidden="true" />
+							<div className="flex-1 min-w-0">
+								<div className="text-xs font-bold tracking-wide">{a.title}</div>
+								<div className="text-sm font-medium">{a.message}</div>
+							</div>
+							<div className="text-sm font-bold whitespace-nowrap">{formatAheadDistance(a.aheadMeters)} ahead</div>
+							<button
+								onClick={() => hazardAlerts.dismiss(a.key)}
+								aria-label={`Dismiss ${a.title} alert`}
+								className="p-1 rounded hover:bg-black/10 focus:outline-none focus:ring-2 focus:ring-current"
+							>
+								<X className="w-4 h-4" aria-hidden="true" />
+							</button>
+						</div>
+					);
+				})}
+			</div>
+		)}
 
 			{/* Global modals */}
 			{/* Reject modal */}
@@ -2134,92 +2375,9 @@ export default function App() {
 							</button>
 							<span className="text-[11px] text-gray-500">or upload from gallery</span>
 						</div>
-						<input type="file" accept="image/*" className="w-full text-xs" onChange={async (e) => {
+						<input type="file" accept="image/*" className="w-full text-xs"						onChange={async (e) => {
 							const file = e.target.files?.[0]; if (!file) return;
-							const reader = new FileReader();
-							reader.onload = async (ev) => {
-								const originalUrl = ev.target.result;
-								const scaledUrl = await new Promise((resolve) => {
-									const im = new Image();
-									im.onload = () => {
-										try {
-											const maxW = 1200; const maxH = 1200;
-											let { width, height } = im;
-											const scale = Math.min(1, Math.min(maxW / width, maxH / height));
-											const w = Math.floor(width * scale), h = Math.floor(height * scale);
-											const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-											const ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0, w, h);
-											const out = cv.toDataURL('image/jpeg', 0.85);
-											resolve(out);
-										} catch { resolve(originalUrl); }
-									};
-									im.onerror = () => resolve(originalUrl);
-									im.src = originalUrl;
-								});
-								setFixPhotoPreview(scaledUrl);
-								try {
-									const exif = await exifr.parse(file);
-									const lat = exif?.latitude, lon = exif?.longitude;
-									if (lat != null && lon != null) {
-										setFixCoord([lon, lat]); setFixOcrMessage('Geotag found in EXIF.');
-									} else {
-										setFixCoord(null); setFixOcrMessage('Trying to read location from image overlay…');
-										// OCR fallback similar to report flow
-										try {
-											const dataUrl = scaledUrl;
-											const img = new Image();
-											img.onload = async () => {
-												const maxW = 1200;
-												const scale = img.width > maxW ? maxW / img.width : 1;
-												const w = Math.floor(img.width * scale);
-												const h = Math.floor(img.height * scale);
-												const canvas = document.createElement('canvas');
-												canvas.width = w; canvas.height = h;
-												const ctx = canvas.getContext('2d');
-												ctx.drawImage(img, 0, 0, w, h);
-												// Crop bottom 35% where GPS overlays usually live
-												const cropY = Math.floor(h * 0.65);
-												const cropH = h - cropY;
-												const crop = document.createElement('canvas');
-												crop.width = w; crop.height = cropH;
-												crop.getContext('2d').drawImage(canvas, 0, cropY, w, cropH, 0, 0, w, cropH);
-												const cropUrl = crop.toDataURL('image/png');
-												try {
-													const Tesseract = (await import('tesseract.js')).default;
-													const { data } = await Tesseract.recognize(cropUrl, 'eng');
-													const text = (data?.text || '').replace(/\n+/g, ' ');
-													// Parse Lat/Long labels first
-													let latNum = null, lonNum = null;
-													const latM = text.match(/Lat(?:itude)?[^0-9+-]*([+-]?\d{1,2}\.\d+)/i);
-													const lonM = text.match(/Lon(?:g|gitude)?[^0-9+-]*([+-]?\d{1,3}\.\d+)/i);
-													if (latM && lonM) { latNum = parseFloat(latM[1]); lonNum = parseFloat(lonM[1]); }
-													if (latNum == null || lonNum == null) {
-														// Fallback: scan for decimal numbers and pick plausible lat/lon pair
-														const nums = [...text.matchAll(/[+-]?\d{1,3}\.\d+/g)].map(m => parseFloat(m[0]));
-														if (nums.length >= 2) {
-															for (let i = 0; i < nums.length - 1; i += 1) {
-																const a = nums[i], b = nums[i + 1];
-																if (Math.abs(a) <= 90 && Math.abs(b) <= 180) { latNum = a; lonNum = b; break; }
-															}
-														}
-													}
-													if (latNum != null && lonNum != null) {
-														setFixCoord([lonNum, latNum]);
-														setFixOcrMessage(`Coordinates detected on image: ${latNum.toFixed(5)}, ${lonNum.toFixed(5)}`);
-													} else {
-														setFixOcrMessage("Couldn't find coordinates on the image.");
-													}
-												} catch {
-													setFixOcrMessage('OCR failed while reading the image.');
-												}
-											};
-											img.onerror = () => setFixOcrMessage("Couldn't load image for OCR.");
-											img.src = dataUrl;
-										} catch { }
-									}
-								} catch { setFixCoord(null); setFixOcrMessage('EXIF not readable.'); }
-							};
-							reader.readAsDataURL(file);
+							await handleImageSelected(file, 'fix');
 						}} />
 						{fixPhotoPreview && (
 							<div className="mt-2">
@@ -2515,9 +2673,51 @@ export default function App() {
 					{/* Map filters: visible to all users */}
 					<div className="mt-4 flex flex-wrap gap-3 text-sm">
 						<label className="inline-flex items-center gap-2 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md">
-							<input type="checkbox" checked={showFixed} onChange={(e) => setShowFixed(e.target.checked)} className="w-4 h-4 rounded" />
-							<span className="font-medium">Show fixed potholes</span>
+						<input type="checkbox" checked={showFixed} onChange={(e) => setShowFixed(e.target.checked)} className="w-4 h-4 rounded" />
+						<span className="font-medium">Show fixed potholes</span>
+					</label>
+					<label className="inline-flex items-center gap-2 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md" title="Density of active hazard reports (severity × recency)">
+						<input type="checkbox" checked={safetyHeatmapOn} onChange={(e) => setSafetyHeatmapOn(e.target.checked)} className="w-4 h-4 rounded" />
+						<span className="font-medium">Safety heatmap</span>
+						{userReports.length === 0 && <span className="text-xs text-gray-400">(no reports yet)</span>}
+					</label>
+					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
+						<span
+							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
+							title={isSpeechSupported() ? "Voice guidance" : "Speech synthesis is not supported in this browser"}
+						>
+							{voiceSettings.navigation || voiceSettings.safety ? <Volume2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" /> : <VolumeX className="w-4 h-4 text-gray-400" aria-hidden="true" />}
+							Voice
+						</span>
+						<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+							<input
+								type="checkbox"
+								checked={voiceSettings.navigation}
+								disabled={!isSpeechSupported()}
+								onChange={(e) => setVoiceSettings((s) => {
+									const next = { ...s, navigation: e.target.checked };
+									if (!next.navigation) cancelSpeech();
+									return next;
+								})}
+								className="w-4 h-4 rounded"
+							/>
+							<span>Navigation</span>
 						</label>
+						<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+							<input
+								type="checkbox"
+								checked={voiceSettings.safety}
+								disabled={!isSpeechSupported()}
+								onChange={(e) => setVoiceSettings((s) => {
+									const next = { ...s, safety: e.target.checked };
+									if (!next.safety) cancelSpeech();
+									return next;
+								})}
+								className="w-4 h-4 rounded"
+							/>
+							<span>Safety</span>
+						</label>
+					</div>
 						{/* Avoid feature removed for now */}
 					</div>
 					{/* Avoidance status removed */}
@@ -2661,6 +2861,55 @@ export default function App() {
 					{routes.length > 0 && (
 						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
 							<h2 className="text-base font-bold mb-4 text-gray-800 dark:text-gray-100 sticky top-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm z-10 px-1 py-1 rounded">Route Options</h2>
+
+							{routes.length > 1 && recommendation && recChoice === null && routeAnalyses[recommendation.recommendedIndex] && (
+								<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Recommended safer route">
+									<div className="flex items-center justify-between gap-2">
+										<span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Recommended safer route</span>
+										<span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: routeAnalyses[recommendation.recommendedIndex].classification.color }}>
+											Safety: {routeAnalyses[recommendation.recommendedIndex].score}/100
+										</span>
+									</div>
+									<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
+										<span className="font-bold">{routeAnalyses[recommendation.recommendedIndex].label}</span>
+										<span className="text-[11px] px-2 py-0.5 rounded-full bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">Travel time: {routeAnalyses[recommendation.recommendedIndex].durationMinutes} min</span>
+										<span className="text-[11px] px-2 py-0.5 rounded-full bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">{routeAnalyses[recommendation.recommendedIndex].distanceKm.toFixed(1)} km</span>
+									</div>
+									<div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
+										{recommendation.isFastest
+											? "Also the fastest available route."
+											: `${recommendation.timeDeltaMinutes > 0 ? `+${recommendation.timeDeltaMinutes} min` : "Same time"} vs fastest (+${recommendation.timeDeltaPct}%) · +${recommendation.safetyAdvantage} safety points`}
+									</div>
+									{recommendationReasons.length > 0 && (
+										<div className="mt-2 rounded-lg bg-white/70 dark:bg-gray-900/50 border border-emerald-200 dark:border-emerald-800 p-2" role="group" aria-label="Why this route">
+											<div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1">Why this route?</div>
+											<ul className="space-y-0.5 text-[11px] text-gray-600 dark:text-gray-300 list-disc list-inside">
+												{recommendationReasons.map((reason, ri) => (
+													<li key={`${ri}-${reason}`}>{reason}</li>
+												))}
+											</ul>
+										</div>
+									)}
+									<div className="mt-3 flex flex-wrap gap-2">
+										<button
+											onClick={() => {
+												const map = window._mapInstance;
+												if (map) selectRouteById(map, routes, recommendation.recommendedIndex);
+												setRecChoice("use");
+											}}
+											className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 shadow-md hover:scale-105 transition-all duration-200"
+										>
+											Use Recommended Route
+										</button>
+										<button
+											onClick={() => setRecChoice("keep")}
+											className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-gray-300 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-800 transition-all duration-200"
+										>
+											Keep Current Route
+										</button>
+									</div>
+								</div>
+							)}
 							<ul className="space-y-3" role="listbox" aria-label="Route options" onKeyDown={(e) => {
 								const total = routes.length; if (!total) return;
 								if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); const cur = Number(selectedRouteId) || 0; const nxt = Math.min(total - 1, cur + 1); const map = window._mapInstance; if (map) selectRouteById(map, routes, nxt); }
@@ -2682,6 +2931,9 @@ export default function App() {
 												<div>
 													<div className="font-semibold flex items-center gap-2">
 														<span className="text-gray-900 dark:text-gray-100">Route {idx + 1}</span>
+													{recommendation?.recommendedIndex === idx && (
+														<span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow-sm" title="Recommended safer route">RECOMMENDED</span>
+													)}
 														{potCount > 0 && (
 															<span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-orange-400 to-red-500 text-white font-bold shadow-sm animate-pulse" title="User-reported potholes along this route">{potCount} pothole{potCount > 1 ? 's' : ''}</span>
 														)}
@@ -2732,8 +2984,17 @@ export default function App() {
 															}
 														}}
 													>
-														<Gauge className="w-3.5 h-3.5" /> Traffic
-													</button>
+												<Gauge className="w-3.5 h-3.5" /> Traffic
+											</button>
+											<button
+												className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 flex items-center gap-1 transition-all duration-200 hover:scale-105 whitespace-nowrap"
+												onClick={() => setOpenIncidentId((cur) => (String(idx) === String(cur) ? null : String(idx)))}
+											>
+												<AlertTriangle className="w-3.5 h-3.5" /> Incidents
+												{routeIncidentResults[idx]?.incidents?.length ? (
+													<span className="ml-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-rose-600 text-white" aria-label={`${routeIncidentResults[idx].incidents.length} incidents`}>{routeIncidentResults[idx].incidents.length}</span>
+												) : null}
+											</button>
 													<button
 														className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-1 transition-all duration-200 hover:scale-105 whitespace-nowrap"
 														onClick={() => {
@@ -2765,7 +3026,30 @@ export default function App() {
 												</div>
 											</div>
 
-											{String(openDetailsId) === String(idx) && (
+											{routeAnalyses[idx] && (
+									<div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 space-y-1.5">
+										<div className="flex items-center justify-between gap-2">
+											<span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Route analysis</span>
+											<span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: routeAnalyses[idx].classification.color }}>
+												Safety: {routeAnalyses[idx].score}/100
+											</span>
+										</div>
+										<div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-700 dark:text-gray-300">
+											<span>Distance: {routeAnalyses[idx].distanceKm.toFixed(1)} km</span>
+											<span>Time: {routeAnalyses[idx].durationMinutes} min</span>
+											<span>Traffic: {routeAnalyses[idx].traffic.label}{routeAnalyses[idx].traffic.estimated ? " (est.)" : ""}</span>
+											<span>Potholes: {routeAnalyses[idx].potholes.count} ({routeAnalyses[idx].potholes.highCount} high)</span>
+											<span>Weather: {routeAnalyses[idx].weather.label}</span>
+											<span>Incidents: {routeAnalyses[idx].incidents.label}</span>
+										</div>
+										<div className="text-[10px] text-gray-500 dark:text-gray-400">
+											{routeAnalyses[idx].classification.label}
+											{routeAnalyses[idx].missingFactors.length > 0 && ` · ${routeAnalyses[idx].missingFactors.length} factor(s) unavailable`}
+										</div>
+									</div>
+								)}
+
+								{String(openDetailsId) === String(idx) && (
 												<div className="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2">
 													<h3 className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">Turn-by-turn steps</h3>
 													<ol className="list-decimal ml-5 space-y-1 text-xs">
@@ -2849,7 +3133,38 @@ export default function App() {
 												</div>
 											)}
 
-											{String(openWeatherId) === String(idx) && (
+											{String(openIncidentId) === String(idx) && (
+									<div className="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2">
+										<h3 className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">
+											Incidents ({(routeIncidentResults[idx]?.incidents || []).length})
+										</h3>
+										{(routeIncidentResults[idx]?.incidents || []).length === 0 ? (
+											<div className="text-[11px] text-gray-500">No incidents detected from available sources.</div>
+										) : (
+											<ul className="space-y-2 text-[11px]">
+												{(routeIncidentResults[idx].incidents || []).map((inc) => (
+													<li key={inc.id} className="flex items-start gap-2 border-b border-gray-100 dark:border-gray-800 pb-1.5 last:border-0">
+														<span className="mt-0.5 inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: inc.severity === 'critical' ? '#7f1d1d' : inc.severity === 'high' ? '#ef4444' : inc.severity === 'medium' ? '#f59e0b' : '#eab308' }} aria-hidden="true" />
+														<div className="min-w-0">
+															<div className="font-semibold">{INCIDENT_TYPE_LABELS[inc.type] || 'Incident'} · {String(inc.severity || '').toUpperCase()}</div>
+															<div className="text-gray-600 dark:text-gray-400">{inc.description}</div>
+															<div className="text-gray-400">
+																{inc.coord[1].toFixed(5)}, {inc.coord[0].toFixed(5)} · {inc.distanceFromRouteMeters === 0 ? 'on route' : `~${inc.distanceFromRouteMeters} m from route`}
+															</div>
+														</div>
+													</li>
+												))}
+											</ul>
+										)}
+										<div className="mt-2 text-[10px] text-gray-500">
+											Sources: {routeIncidentResults[idx]?.availableSources?.length
+												? routeIncidentResults[idx].availableSources.map((s) => (s === 'mapbox-congestion' ? 'Mapbox traffic' : s === 'user-reports' ? 'user reports' : 'incident feed')).join(', ')
+												: 'none'}
+										</div>
+									</div>
+								)}
+
+								{String(openWeatherId) === String(idx) && (
 												<div className="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2">
 													<h3 className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">Weather along route</h3>
 													<div className="flex items-center justify-between mb-2">
@@ -2964,143 +3279,10 @@ export default function App() {
 								<input
 									type="file"
 									accept="image/*"
-									capture="environment"
-									onChange={(e) => {
+									capture="environment"									onChange={(e) => {
 										const file = e.target.files?.[0];
 										if (!file) return;
-										setReportForm((f) => ({ ...f, photoSource: 'upload' }));
-										const reader = new FileReader();
-										reader.onload = async (ev) => {
-											// Downscale image to keep size reasonable for storage and popups
-											const originalUrl = ev.target.result;
-											const scaledUrl = await new Promise((resolve) => {
-												const im = new Image();
-												im.onload = () => {
-													try {
-														const maxW = 1200; const maxH = 1200;
-														let { width, height } = im;
-														const scale = Math.min(1, Math.min(maxW / width, maxH / height));
-														const w = Math.floor(width * scale), h = Math.floor(height * scale);
-														const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-														const ctx = cv.getContext('2d'); ctx.drawImage(im, 0, 0, w, h);
-														const out = cv.toDataURL('image/jpeg', 0.85);
-														resolve(out);
-													} catch { resolve(originalUrl); }
-												};
-												im.onerror = () => resolve(originalUrl);
-												im.src = originalUrl;
-											});
-											setReportForm((f) => ({ ...f, photoPreview: scaledUrl }));
-											// Attempt EXIF geotag extraction
-											try {
-												const exif = await exifr.parse(file);
-												const lat = exif?.latitude;
-												const lon = exif?.longitude;
-												// Capture date from EXIF if available
-												try {
-													const exifDate = exif?.DateTimeOriginal || exif?.CreateDate || exif?.ModifyDate || exif?.date;
-													if (exifDate) {
-														const ts = exifDate instanceof Date ? exifDate.getTime() : (Date.parse(String(exifDate)) || null);
-														if (ts) setReportForm((f) => ({ ...f, captureAt: ts }));
-													}
-												} catch { }
-												if (lat != null && lon != null) {
-													setReportForm((f) => ({ ...f, coord: [lon, lat] }));
-													setOcrMessage("Geotag found in EXIF.");
-												} else {
-													setReportForm((f) => ({ ...f, coord: null }));
-													// Fallback: OCR the bottom region for 'Lat'/'Long'
-													setOcrBusy(true);
-													setOcrMessage("Trying to read location from image overlay…");
-													try {
-														const dataUrl = scaledUrl;
-														// Create image
-														const img = new Image();
-														img.onload = async () => {
-															const maxW = 1200;
-															const scale = img.width > maxW ? maxW / img.width : 1;
-															const w = Math.floor(img.width * scale);
-															const h = Math.floor(img.height * scale);
-															const canvas = document.createElement("canvas");
-															canvas.width = w;
-															canvas.height = h;
-															const ctx = canvas.getContext("2d");
-															ctx.drawImage(img, 0, 0, w, h);
-															// Crop bottom 35%
-															const cropY = Math.floor(h * 0.65);
-															const cropH = h - cropY;
-															const crop = document.createElement("canvas");
-															crop.width = w;
-															crop.height = cropH;
-															crop.getContext("2d").drawImage(canvas, 0, cropY, w, cropH, 0, 0, w, cropH);
-															const cropUrl = crop.toDataURL("image/png");
-															try {
-																const Tesseract = (await import("tesseract.js")).default;
-																const { data } = await Tesseract.recognize(cropUrl, "eng");
-																const text = (data?.text || "").replace(/\n+/g, " ");
-																// Try to parse Lat/Long
-																let latNum = null, lonNum = null;
-																const latM = text.match(/Lat(?:itude)?[^0-9+-]*([+-]?\d{1,2}\.\d+)/i);
-																const lonM = text.match(/Lon(?:g|gitude)?[^0-9+-]*([+-]?\d{1,3}\.\d+)/i);
-																if (latM && lonM) {
-																	latNum = parseFloat(latM[1]);
-																	lonNum = parseFloat(lonM[1]);
-																}
-																if ((latNum == null || lonNum == null)) {
-																	// Fallback: first two decimals looking like coords
-																	const nums = [...text.matchAll(/[+-]?\d{1,3}\.\d+/g)].map((m) => parseFloat(m[0]));
-																	if (nums.length >= 2) {
-																		// Heuristic: lat within [-90,90], lon within [-180,180]
-																		for (let i = 0; i < nums.length - 1; i += 1) {
-																			const a = nums[i], b = nums[i + 1];
-																			if (Math.abs(a) <= 90 && Math.abs(b) <= 180) { latNum = a; lonNum = b; break; }
-																		}
-																	}
-																}
-																// Also try to parse a date/time from overlay (e.g., 2025-11-10 14:33:22 or 10-11-2025 2:33 PM)
-																try {
-																	let ts = null;
-																	let m = text.match(/(\d{4})[\/.\-\s](\d{1,2})[\/.\-\s](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
-																	if (m) {
-																		let [_, y, mo, d, hh, mm, ss, ap] = m; // eslint-disable-line no-unused-vars
-																		y = Number(y); mo = Number(mo) - 1; d = Number(d);
-																		let H = Number(hh); const M = Number(mm); const S = ss ? Number(ss) : 0;
-																		if (ap) { const up = ap.toUpperCase(); if (up === 'PM' && H < 12) H += 12; if (up === 'AM' && H === 12) H = 0; }
-																		ts = new Date(y, mo, d, H, M, S).getTime();
-																	}
-																	if (!ts) {
-																		m = text.match(/(\d{1,2})[\/.\-\s](\d{1,2})[\/.\-\s](\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
-																		if (m) {
-																			let [_, d, mo, y, hh, mm, ss, ap] = m; // eslint-disable-line no-unused-vars
-																			y = Number(y); mo = Number(mo) - 1; d = Number(d);
-																			let H = Number(hh); const M = Number(mm); const S = ss ? Number(ss) : 0;
-																			if (ap) { const up = ap.toUpperCase(); if (up === 'PM' && H < 12) H += 12; if (up === 'AM' && H === 12) H = 0; }
-																			ts = new Date(y, mo, d, H, M, S).getTime();
-																		}
-																	}
-																	if (ts) setReportForm((f) => ({ ...f, captureAt: ts }));
-																} catch { }
-																if (latNum != null && lonNum != null) {
-																	setReportForm((f) => ({ ...f, coord: [lonNum, latNum] }));
-																	setOcrMessage(`Coordinates detected on image: ${latNum.toFixed(5)}, ${lonNum.toFixed(5)}`);
-																} else {
-																	setOcrMessage("Couldn't find coordinates on the image.");
-																}
-															} catch (ocrErr) {
-																setOcrMessage("OCR failed while reading the image.");
-															}
-														};
-														img.onerror = () => setOcrMessage("Couldn't load image for OCR.");
-														img.src = dataUrl;
-													} catch { }
-													setOcrBusy(false);
-												}
-											} catch (err) {
-												setReportForm((f) => ({ ...f, coord: null }));
-												setOcrMessage("EXIF not readable. Will try reading overlay…");
-											}
-										};
-										reader.readAsDataURL(file);
+										handleImageSelected(file, 'report');
 									}}
 									className="mt-1 w-full text-xs"
 								/>
@@ -3137,6 +3319,11 @@ export default function App() {
 										)}
 									</div>
 								)}
+								{reportForm.detection && (
+									<div className="mt-1 text-[10px] text-indigo-800 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-1">
+										Model analysis: {reportForm.detection.detected ? `pothole detected · confidence ${Math.round((reportForm.detection.confidence || 0) * 100)}%` : "no pothole detected"}{reportForm.detection.severity ? ` · ${reportForm.detection.severity}` : ""} · assistive only
+									</div>
+								)}
 							</div>
 
 							{/* Submit */}
@@ -3168,7 +3355,7 @@ export default function App() {
 											<div className="flex-1 min-w-0">
 												<div className="font-medium truncate">{r.description || "(no description)"}</div>
 												<div className="text-gray-500 dark:text-gray-400 truncate">
-													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {r.severity} • <span className={`px-1 rounded ${r.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : r.status === 'fixed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{r.status || 'unverified'}</span>
+													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {r.severity} • {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
 													{r.pendingFixReview && <span className="ml-2 px-1 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">Fix proof pending</span>}
 												</div>
 												{r.pendingFixReview && r.fixProofPhotoDataUrl && (
@@ -3215,7 +3402,7 @@ export default function App() {
 							<div className="mb-3 flex items-center gap-3 text-xs">
 								<label className="inline-flex items-center gap-2 border border-gray-300 dark:border-gray-700 rounded px-2 py-1">
 									<input type="checkbox" checked={showOnlyUnverified} onChange={(e) => setShowOnlyUnverified(e.target.checked)} />
-									<span>Show only unverified on map</span>
+									<span>Show only reported (awaiting review) on map</span>
 								</label>
 							</div>
 							<div className="flex flex-wrap gap-2 text-xs mb-3">
@@ -3235,7 +3422,7 @@ export default function App() {
 									{userReports.slice().reverse().map((r) => (
 										<li key={r.id} className="py-2 flex items-start gap-2">
 											<div className="min-w-0 flex-1">
-												<div className="font-medium truncate">{r.description || '(no description)'} <span className={`ml-1 px-1 rounded ${r.status === 'confirmed' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300' : r.status === 'fixed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300'}`}>{r.status || 'unverified'}</span>
+												<div className="font-medium truncate">{r.description || '(no description)'} {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="ml-1 px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
 													{r.reportedToBBMP && (
 														<span className="ml-2 px-1 rounded bg-indigo-900/40 text-indigo-200 text-[11px]">Reported to BBMP</span>
 													)}
@@ -3247,6 +3434,10 @@ export default function App() {
 													)}
 												</div>
 												<div className="text-gray-500 dark:text-gray-400">{r.coord[1].toFixed(5)}, {r.coord[0].toFixed(5)} • {new Date(r.captureAt || r.createdAt).toLocaleString()}</div>
+							{(() => {
+								const c = assessReportConfidence([r]);
+								return <div className="mt-0.5"><span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: `${c.color}22`, color: c.color }}>System confidence: {c.level}</span></div>;
+							})()}
 												{r.pendingFixReview && r.fixProofPhotoDataUrl && (
 													<div className="mt-1 flex items-center gap-2">
 														<img src={r.fixProofPhotoDataUrl} alt="fix proof" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-zoom-in" onClick={() => openImageModal(r.fixProofPhotoDataUrl, `Fix proof for report ${r.id}`)} />
@@ -3258,10 +3449,11 @@ export default function App() {
 												)}
 												<div className="mt-1 flex flex-wrap gap-2">
 													<button onClick={() => { const map = window._mapInstance; if (map) map.flyTo({ center: r.coord, zoom: 16 }); }} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">View</button>
-													<button onClick={() => setUserReports((prev) => { const arr = prev.map(x => x.id === r.id ? { ...x, status: 'confirmed', reviewedAt: Date.now() } : x); persistReports(arr); return arr; })} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">Mark confirmed</button>
-													<button onClick={() => setUserReports((prev) => { const arr = prev.map(x => x.id === r.id ? { ...x, status: 'fixed', reviewedAt: Date.now(), pendingFixReview: false } : x); persistReports(arr); return arr; })} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">Mark fixed</button>
+													{nextStatuses(r.status).map((s) => (
+														<button key={s} onClick={() => setReportStatus(r.id, s)} className="px-2 py-1 rounded border border-indigo-300 dark:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300">{s === 'verified' ? 'Verify' : `Mark ${STATUS_LABELS[s].toLowerCase()}`}</button>
+													))}
 													<button onClick={() => openRejectModal(r.id)} className="px-2 py-1 rounded border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600">Reject</button>
-													<button onClick={() => setUserReports((prev) => { const arr = prev.map(x => x.id === r.id ? { ...x, status: 'unverified', reviewedAt: null, pendingFixReview: false, hiddenGlobally: false, rejectionReason: null } : x); persistReports(arr); return arr; })} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">Reset</button>
+													<button onClick={() => setUserReports((prev) => { const arr = prev.map(x => x.id === r.id ? { ...x, status: 'reported', reviewedAt: null, pendingFixReview: false, hiddenGlobally: false, rejectionReason: null } : x); persistReports(arr); return arr; })} className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">Reset to reported</button>
 													<button onClick={() => deleteReport(r.id)} className="px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30">Delete</button>
 													<div className="inline-flex items-center gap-1">
 														<span className="text-[10px] text-gray-500">Level:</span>
