@@ -15,6 +15,7 @@ import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence } from "./utils/confidence";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots, HOTSPOT_CONFIG } from "./utils/hotspots";
+import { hourlyTimeRiskProfile, getSafestWindow } from "./utils/safetyScore";
 import {
   normalizeStatus,
   nextStatuses,
@@ -911,6 +912,9 @@ export default function App() {
 
 	// Ranked hazard hotspots (concentrated active hazards, best-first)
 	const hotspots = useMemo(() => detectHotspots(userReports, { includeFixed: showFixed }), [userReports, showFixed]);
+
+	// Typical lowest-risk travel window for today's weekday (hour pattern, not a forecast)
+	const safestWindow = useMemo(() => getSafestWindow(hourlyTimeRiskProfile()), []);
 
 	// Fly the map to a hotspot zone
 	const focusHotspot = (coord) => {
@@ -3102,10 +3106,12 @@ export default function App() {
 											<span>Potholes: {routeAnalyses[idx].potholes.count} ({routeAnalyses[idx].potholes.highCount} high)</span>
 											<span>Weather: {routeAnalyses[idx].weather.label}</span>
 											<span>Incidents: {routeAnalyses[idx].incidents.label}</span>
+											<span style={{ color: routeAnalyses[idx].time.color, fontWeight: 600 }}>Time of day: {routeAnalyses[idx].time.label}</span>
 										</div>
 										<div className="text-[10px] text-gray-500 dark:text-gray-400">
 											{routeAnalyses[idx].classification.label}
 											{routeAnalyses[idx].missingFactors.length > 0 && ` · ${routeAnalyses[idx].missingFactors.length} factor(s) unavailable`}
+											{' '}· Typical safest window {String(safestWindow.startHour).padStart(2, '0')}:00–{String(safestWindow.endHour).padStart(2, '0')}:00 (risk {safestWindow.risk})
 										</div>
 									</div>
 								)}

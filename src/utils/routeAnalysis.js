@@ -16,6 +16,7 @@ import {
   calculateTimeRisk,
   calculateRouteSafetyScore,
   classifySafetyScore,
+  classifyTimeRisk,
 } from "./safetyScore";
 import { pointLineDistMeters, isValidCoord } from "./geo";
 
@@ -190,6 +191,12 @@ export function analyzeRoute(route, index, ctx = {}) {
       available: incidentsAvailable,
       count: incidentList.length,
       label: incidentsAvailable ? String(incidentList.length) : "—",
+    },
+    time: {
+      risk: timeRisk,
+      available: true,
+      label: classifyTimeRisk(timeRisk).label,
+      color: classifyTimeRisk(timeRisk).color,
     },
     score,
     classification: classifySafetyScore(score),

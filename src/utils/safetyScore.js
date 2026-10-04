@@ -166,8 +166,9 @@ export function calculateAccidentRisk(incidents, { available = true } = {}) {
 }
 
 /**
- * Time-of-day risk profile (deterministic hour table).
- * Rush hours and night driving carry higher baseline risk.
+ * Time-of-day risk profile (deterministic hour table with weekday context).
+ * Rush hours and night driving carry higher baseline risk; weekday commuter
+ * peaks and weekend late nights add a modifier on top of the base hour.
  * @param {Date} [date]
  * @returns {number} 0..100 risk
  */
@@ -180,7 +181,69 @@ export function calculateTimeRisk(date = new Date()) {
     78, 75, 60, 50, 45, 55, // 18-23 evening rush then night
   ];
   const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
-  return HOUR_RISK[d.getHours()] ?? 40;
+  const hour = d.getHours();
+  let risk = HOUR_RISK[hour] ?? 40;
+  const day = d.getDay(); // 0=Sun … 6=Sat
+  const isWeekend = day === 0 || day === 6;
+
+  if (isWeekend && (hour >= 22 || hour <= 4)) {
+    risk += 12; // weekend late night: fatigue, nightlife traffic
+  } else if (!isWeekend && ((hour >= 7 && hour <= 9) || (hour >= 16 && hour <= 18))) {
+    risk += 8; // weekday commuter peak
+  }
+  return Math.max(0, Math.min(100, risk));
+}
+
+/** Bands for interpreting a time risk value. */
+export const TIME_RISK_BANDS = [
+  { key: "high", label: "High risk", min: 70, color: "#dc2626" },
+  { key: "elevated", label: "Elevated", min: 50, color: "#d97706" },
+  { key: "typical", label: "Typical", min: 0, color: "#16a34a" },
+];
+
+/** Classify a 0..100 time risk into a labeled band. */
+export function classifyTimeRisk(risk) {
+  if (!Number.isFinite(risk)) return { key: "unknown", label: "—", min: 0, color: "#6b7280" };
+  return TIME_RISK_BANDS.find((b) => risk >= b.min) || TIME_RISK_BANDS[TIME_RISK_BANDS.length - 1];
+}
+
+/**
+ * Typical hourly risk profile for the weekday of `date` (24 values, 0..23).
+ * This is a static pattern (what is *usually* risky at that hour), not a
+ * real-time forecast — callers must label it as typical/expected.
+ * @param {Date} [date]
+ * @returns {number[]} 24 hourly risks
+ */
+export function hourlyTimeRiskProfile(date = new Date()) {
+  const base = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const profile = [];
+  for (let hour = 0; hour < 24; hour++) {
+    const d = new Date(base.getTime());
+    d.setHours(hour, 0, 0, 0);
+    profile.push(calculateTimeRisk(d));
+  }
+  return profile;
+}
+
+/**
+ * Find the lowest-risk contiguous window in an hourly profile (circular).
+ * Ties break toward the earlier hour, so output is deterministic.
+ *
+ * @param {number[]} [profile] 24 hourly risks (defaults to today's profile)
+ * @param {number} [windowHours] window length in hours
+ * @returns {{startHour:number, endHour:number, risk:number}} averaged window risk
+ */
+export function getSafestWindow(profile = null, windowHours = 4) {
+  const p = Array.isArray(profile) && profile.length === 24 ? profile : hourlyTimeRiskProfile();
+  const len = Math.max(1, Math.min(24, Math.floor(windowHours)));
+  let best = { startHour: 0, endHour: len % 24, risk: Infinity };
+  for (let start = 0; start < 24; start++) {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += p[(start + i) % 24];
+    const avg = sum / len;
+    if (avg < best.risk) best = { startHour: start, endHour: (start + len) % 24, risk: Math.round(avg) };
+  }
+  return best;
 }
 
 /**
