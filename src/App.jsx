@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3 } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, Layers } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -152,6 +152,10 @@ export default function App() {
 	const bbmpDataRef = useRef(null); // store fetched GeoJSON features
 	// Safety heatmap layer (weighted hazard density over the map)
 	const [safetyHeatmapOn, setSafetyHeatmapOn] = useState(false);
+	// Map layer visibility toggles (Layers popover)
+	const [bbmpVisible, setBbmpVisible] = useState(true);
+	const [congestionVisible, setCongestionVisible] = useState(true);
+	const [layersMenuOpen, setLayersMenuOpen] = useState(false);
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
 	// Trip history (persisted record of routes actually used)
@@ -643,6 +647,7 @@ export default function App() {
 				zoom: 1.5,
 			});
 			map.addControl(new mapboxgl.NavigationControl(), "top-right");
+			map.addControl(new mapboxgl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
 			// keep a global reference to update markers later
 			// eslint-disable-next-line no-underscore-dangle
 			window._mapInstance = map;
@@ -870,6 +875,7 @@ export default function App() {
 			if (congestionSegments?.length) {
 				map.addSource('congestion', { type: 'geojson', data: { type: 'FeatureCollection', features: congestionSegments } });
 				map.addLayer({ id: 'congestion-overlay', type: 'line', source: 'congestion', paint: { 'line-width': 4, 'line-color': ['match', ['get', 'congestion'], 'low', '#22c55e', 'moderate', '#f59e0b', 'heavy', '#dc2626', 'severe', '#7f1d1d', '#6b7280'], 'line-opacity': 0.85 } });
+				try { if (!congestionVisible) map.setLayoutProperty('congestion-overlay', 'visibility', 'none'); } catch { }
 			}
 		} catch { }
 		// Fit bounds to primary route
@@ -1627,6 +1633,7 @@ export default function App() {
 		if (!bbmpDataRef.current) return; // need data first
 		map.addSource('bbmp_potholes', { type: 'geojson', data: { type: 'FeatureCollection', features: bbmpDataRef.current } });
 		map.addLayer({ id: 'bbmp_potholes_layer', type: 'circle', source: 'bbmp_potholes', paint: { 'circle-radius': 6, 'circle-color': '#f97316', 'circle-opacity': 0.85 } });
+		try { if (!bbmpVisible) map.setLayoutProperty('bbmp_potholes_layer', 'visibility', 'none'); } catch { }
 		// Auto-zoom to data so user can see it immediately
 		try {
 			const feats = bbmpDataRef.current || [];
@@ -1678,6 +1685,16 @@ export default function App() {
 	};
 
 	useEffect(() => { renderSafetyHeatmap(); }, [safetyHeatmapOn, userReports, showFixed]);
+
+	// Apply layer visibility toggles (Layers popover) to already-drawn layers
+	useEffect(() => {
+		const map = window._mapInstance; if (!map) return;
+		try { if (map.getLayer('bbmp_potholes_layer')) map.setLayoutProperty('bbmp_potholes_layer', 'visibility', bbmpVisible ? 'visible' : 'none'); } catch { }
+	}, [bbmpVisible, bbmpLoaded]);
+	useEffect(() => {
+		const map = window._mapInstance; if (!map) return;
+		try { if (map.getLayer('congestion-overlay')) map.setLayoutProperty('congestion-overlay', 'visibility', congestionVisible ? 'visible' : 'none'); } catch { }
+	}, [congestionVisible, congestionSegments]);
 
 	const loadBBMPData = async () => {
 		const map = window._mapInstance;
@@ -3035,6 +3052,33 @@ export default function App() {
 							</div>
 						)}
 						<div className="absolute top-4 right-4 flex items-center gap-2">
+							<div className="relative">
+								<button
+									onClick={() => setLayersMenuOpen((v) => !v)}
+									aria-expanded={layersMenuOpen}
+									title="Map layers"
+									className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
+								>
+									<Layers className="w-4 h-4" aria-hidden="true" />
+								</button>
+								{layersMenuOpen && (
+									<div className="absolute right-0 mt-2 w-52 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md shadow-xl p-3 z-30" role="group" aria-label="Layer visibility">
+										<div className="text-[11px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">Layers</div>
+										{[
+											{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
+											{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
+											{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
+											{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
+										].map((l) => (
+											<label key={l.label} className="flex items-center justify-between gap-2 text-xs py-1.5 cursor-pointer text-gray-700 dark:text-gray-200">
+												<span>{l.label}</span>
+												<input type="checkbox" checked={l.checked} onChange={(e) => l.onChange(e.target.checked)} className="w-4 h-4 rounded" />
+											</label>
+										))}
+										{!bbmpLoaded && <div className="mt-1 text-[10px] text-gray-400">BBMP layer appears after loading civic data.</div>}
+									</div>
+								)}
+							</div>
 							<button
 								onClick={() => setFullMap((v) => !v)}
 								title={fullMap ? 'Exit full view' : 'Full view'}
