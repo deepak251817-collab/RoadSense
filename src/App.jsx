@@ -17,6 +17,15 @@ import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots, HOTSPOT_CONFIG } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow } from "./utils/safetyScore";
 import {
+  createTrip,
+  endTrip,
+  upsertTrip,
+  replaceTrip,
+  loadTripHistory,
+  saveTripHistory,
+  tripSummary,
+} from "./utils/tripHistory";
+import {
   normalizeStatus,
   nextStatuses,
   STATUS_LABELS,
@@ -142,6 +151,10 @@ export default function App() {
 	const [safetyHeatmapOn, setSafetyHeatmapOn] = useState(false);
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
+	// Trip history (persisted record of routes actually used)
+	const [tripHistory, setTripHistory] = useState([]);
+	const activeTripRef = useRef(null); // { trip, routeIndex } — trip not yet ended
+	const [showTrips, setShowTrips] = useState(false);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState(null);
@@ -916,12 +929,67 @@ export default function App() {
 	// Typical lowest-risk travel window for today's weekday (hour pattern, not a forecast)
 	const safestWindow = useMemo(() => getSafestWindow(hourlyTimeRiskProfile()), []);
 
+	// Aggregate trip history stats (basis for the trips panel and analytics)
+	const tripStats = useMemo(() => tripSummary(tripHistory), [tripHistory]);
+
 	// Fly the map to a hotspot zone
 	const focusHotspot = (coord) => {
 		const map = window._mapInstance;
 		if (!map || !Array.isArray(coord)) return;
 		try { map.flyTo({ center: coord, zoom: 15, duration: 800 }); } catch { }
 	};
+
+	// ---- Trip history: record every route actually used ----
+	const persistTrips = (updater) => {
+		setTripHistory((prev) => {
+			const next = updater(prev);
+			saveTripHistory(next);
+			return next;
+		});
+	};
+
+	// Load persisted history once on mount
+	useEffect(() => { setTripHistory(loadTripHistory()); }, []);
+
+	// Opening a route starts a trip; switching/clearing ends the previous one.
+	// The trip snapshot records conditions known at start (later traffic
+	// refreshes do not rewrite history).
+	useEffect(() => {
+		if (activeTripRef.current) {
+			const closed = endTrip(activeTripRef.current.trip, { arrived: false });
+			activeTripRef.current = null;
+			persistTrips((prev) => replaceTrip(prev, closed));
+		}
+		if (selectedRouteId == null || !Array.isArray(routes) || !routes.length) return;
+		const idx = Number(selectedRouteId);
+		const ana = routeAnalyses[idx];
+		const trip = createTrip({
+			originCoord: sourceCoord,
+			originLabel: sourceQuery || '',
+			destCoord: destCoord,
+			destLabel: destQuery || '',
+			routeIndex: idx,
+			distanceMeters: ana?.distanceMeters ?? routes[idx]?.distance,
+			durationMinutes: ana?.durationMinutes ?? (routes[idx]?.duration ? Math.round(routes[idx].duration / 60) : null),
+			safetyScore: ana?.score ?? null,
+			classification: ana?.classification?.label ?? '',
+			incidentCount: ana?.incidents?.count ?? null,
+			potholeCount: ana?.potholes?.count ?? null,
+		});
+		if (!trip) return;
+		activeTripRef.current = { trip, routeIndex: idx };
+		persistTrips((prev) => upsertTrip(prev, trip));
+	}, [selectedRouteId, routes]);
+
+	// Arrival: user within 120 m of the destination completes the active trip
+	useEffect(() => {
+		const active = activeTripRef.current;
+		if (!active || !userCoord || !destCoord) return;
+		if (distMeters(userCoord, destCoord) > 120) return;
+		const trip = endTrip(active.trip, { arrived: true });
+		activeTripRef.current = null;
+		persistTrips((prev) => replaceTrip(prev, trip));
+	}, [userCoord, destCoord]);
 
 	// Route-aware hazard alerts for the currently selected route
 	const selectedRouteCoords =
@@ -2706,6 +2774,14 @@ export default function App() {
 						<AlertTriangle className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Hotspots{hotspots.length > 0 ? ` (${hotspots.length})` : ''}</span>
 					</button>
+					<button
+						onClick={() => setShowTrips((v) => !v)}
+						aria-expanded={showTrips}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showTrips ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<List className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Trips{tripHistory.length > 0 ? ` (${tripHistory.length})` : ''}</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -2782,6 +2858,59 @@ export default function App() {
 											</button>
 										</li>
 									))}
+								</ul>
+							)}
+						</div>
+					)}
+					{/* Trip history */}
+					{showTrips && (
+						<div className="mt-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-4" role="region" aria-label="Trip history">
+							<div className="flex items-center justify-between mb-2">
+								<h3 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">Trip history</h3>
+								<div className="flex items-center gap-3">
+									{tripHistory.length > 0 && (
+										<button onClick={() => { persistTrips(() => []); }} className="text-xs text-red-600 dark:text-red-400 underline">Clear</button>
+									)}
+									<button onClick={() => setShowTrips(false)} className="text-xs text-indigo-700 dark:text-indigo-300 underline">Hide</button>
+								</div>
+							</div>
+							{tripStats.tripCount > 0 && (
+								<div className="mb-2 text-xs text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-3 py-2 border border-indigo-200 dark:border-indigo-800">
+									{tripStats.tripCount} trip{tripStats.tripCount === 1 ? '' : 's'} · {tripStats.totalKm} km · avg safety {tripStats.avgSafety ?? '—'} · arrived {tripStats.arrivedCount}
+								</div>
+							)}
+							{tripHistory.length === 0 ? (
+								<p className="text-sm text-gray-600 dark:text-gray-300">No trips yet. Select a route and it will be recorded here with its safety score.</p>
+							) : (
+								<ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
+									{tripHistory.slice(0, 20).map((t) => {
+										const isActive = t.endedAt == null;
+										const score = t.safetyScore;
+										const scoreColor = score == null ? '#6b7280' : score >= 75 ? '#16a34a' : score >= 60 ? '#d97706' : '#dc2626';
+										return (
+											<li key={t.id} className="rounded-xl border border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-900 px-3 py-2">
+												<div className="flex items-center justify-between gap-2">
+													<span className="text-xs font-semibold text-gray-800 dark:text-gray-100 truncate">
+														{t.originLabel || `${t.originCoord[1].toFixed(3)},${t.originCoord[0].toFixed(3)}`}
+														{' → '}
+														{t.destLabel || `${t.destCoord[1].toFixed(3)},${t.destCoord[0].toFixed(3)}`}
+													</span>
+													<span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${isActive ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300' : t.arrived ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
+														{isActive ? 'IN PROGRESS' : t.arrived ? 'ARRIVED' : 'ENDED'}
+													</span>
+												</div>
+												<div className="mt-1 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400 flex-wrap">
+													<span>{new Date(t.startedAt).toLocaleString()}</span>
+													<span>· Route {t.routeIndex + 1}</span>
+													{t.distanceMeters != null && <span>· {(t.distanceMeters / 1000).toFixed(1)} km</span>}
+													{t.durationMinutes != null && <span>· {t.durationMinutes} min</span>}
+													{score != null && (
+														<span className="font-bold px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: scoreColor }} title={`Safety score${t.classification ? ` — ${t.classification}` : ''}`}>{score}</span>
+													)}
+												</div>
+											</li>
+										);
+									})}
 								</ul>
 							)}
 						</div>
