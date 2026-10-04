@@ -939,6 +939,19 @@ export default function App() {
 	const safestWindow = useMemo(() => getSafestWindow(hourlyTimeRiskProfile()), []);
 
 	// Aggregate trip history stats (basis for the trips panel and analytics)
+	// ---- Trip history: record every route actually used (see hooks/useTripHistory) ----
+	// Declared before the memos below that consume tripHistory.
+	const { tripHistory, persistTrips } = useTripHistory({
+		routes,
+		selectedRouteId,
+		routeAnalyses,
+		sourceCoord,
+		destCoord,
+		sourceQuery,
+		destQuery,
+		userCoord,
+	});
+
 	const tripStats = useMemo(() => tripSummary(tripHistory), [tripHistory]);
 
 	// Safety analytics snapshot (hazards + trend + trips, all real stored data)
@@ -977,18 +990,6 @@ export default function App() {
 		if (!map || !Array.isArray(coord)) return;
 		try { map.flyTo({ center: coord, zoom: 15, duration: 800 }); } catch { }
 	};
-
-	// ---- Trip history: record every route actually used (see hooks/useTripHistory) ----
-	const { tripHistory, persistTrips } = useTripHistory({
-		routes,
-		selectedRouteId,
-		routeAnalyses,
-		sourceCoord,
-		destCoord,
-		sourceQuery,
-		destQuery,
-		userCoord,
-	});
 
 	// Route-aware hazard alerts for the currently selected route
 	const selectedRouteCoords =
