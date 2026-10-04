@@ -597,9 +597,6 @@ export default function App() {
 	const computeUserPotholeCountForRoute = (route, reports, opts, thresholdMeters = 120) =>
 		collectRouteReports(route, reports, opts, thresholdMeters).count;
 
-	// Count avoidance hazards near a route: high severity & confirmed, plus optionally high severity unverified if enabled
-	// Avoidance hazard computation removed for now
-
 	// Ensure we have user's current location as source and then route (used when only destination is provided)
 	const autoRouteFromLiveIfNeeded = async () => {
 		if (sourceCoord || !destCoord) return;
@@ -1185,8 +1182,6 @@ export default function App() {
 		const markers = weather.points.map((p) => {
 			const main = (p?.data?.weather?.[0]?.main || '').toLowerCase();
 			const desc = (p?.data?.weather?.[0]?.description || '').toLowerCase();
-			// Debug: log weather conditions to help troubleshooting
-			console.log(`Weather at ${p.label}: main="${main}", desc="${desc}"`);
 			// Enhanced weather icon mapping with more conditions
 			let emoji = '☀️'; // default sunny
 			if (main.includes('thunder') || desc.includes('thunder')) emoji = '⛈️';
@@ -2826,9 +2821,7 @@ export default function App() {
 							<span>Safety</span>
 						</label>
 					</div>
-						{/* Avoid feature removed for now */}
 					</div>
-					{/* Avoidance status removed */}
 					{/* Ranked hazard hotspots */}
 					<HotspotsPanel
 						show={showHotspots}
