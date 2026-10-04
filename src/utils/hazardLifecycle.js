@@ -36,6 +36,19 @@ export const STATUS_STYLES = {
   "rejected": { bg: "#fee2e2", text: "#991b1b" },
 };
 
+/**
+ * Queue order for admin worklists: items needing action first
+ * (fix proofs surface above their status), lifecycle progression after.
+ */
+export const STATUS_ORDER = {
+  "reported": 0,
+  "under-review": 1,
+  "repair-requested": 2,
+  "verified": 3,
+  "fixed": 4,
+  "rejected": 5,
+};
+
 /** Allowed forward/backward transitions for admins. Rejection is separate. */
 export const STATUS_TRANSITIONS = {
   "reported": ["under-review", "verified"],

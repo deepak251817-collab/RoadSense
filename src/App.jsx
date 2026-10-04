@@ -31,6 +31,7 @@ import {
   nextStatuses,
   STATUS_LABELS,
   STATUS_STYLES,
+  STATUS_ORDER,
 } from "./utils/hazardLifecycle";
 import { analyzeRoutes, collectRouteReports } from "./utils/routeAnalysis";
 import { recommendRoute, buildRecommendationReasons } from "./utils/recommendation";
@@ -125,6 +126,7 @@ export default function App() {
 	const [showFixed, setShowFixed] = useState(true); // show/hide fixed reports on map
 	// Avoidance feature removed for now
 	const [showOnlyUnverified, setShowOnlyUnverified] = useState(false); // admin filter: only unverified
+	const [adminStatusFilter, setAdminStatusFilter] = useState('all'); // admin worklist: 'all' | lifecycle status
 	// Admin mode (simple local toggle with optional PIN)
 	const [adminMode, setAdminMode] = useState(false);
 	// Admin-to-user messages (persisted)
@@ -939,6 +941,29 @@ export default function App() {
 		() => computeSafetyAnalytics({ reports: userReports, trips: tripHistory }),
 		[userReports, tripHistory]
 	);
+
+	// Admin worklist stats: attention counters + per-status counts
+	const adminQueue = useMemo(() => ({
+		pendingFix: userReports.filter((r) => r.pendingFixReview).length,
+		pendingRemoval: userReports.filter((r) => r.pendingRemoval).length,
+		total: userReports.length,
+		byStatus: safetyAnalytics.lifecycle,
+	}), [userReports, safetyAnalytics]);
+
+	// Priority order: fix proofs first, then lifecycle stage, then newest
+	const adminSortedReports = useMemo(() => {
+		const order = (r) => STATUS_ORDER[normalizeStatus(r.status)] ?? 99;
+		const ts = (r) => Number(r.captureAt || r.createdAt || 0);
+		return userReports
+			.slice()
+			.filter((r) => adminStatusFilter === 'all' || normalizeStatus(r.status) === adminStatusFilter)
+			.sort(
+				(a, b) =>
+					Number(Boolean(b.pendingFixReview)) - Number(Boolean(a.pendingFixReview)) ||
+					order(a) - order(b) ||
+					ts(b) - ts(a)
+			);
+	}, [userReports, adminStatusFilter]);
 
 	// Fly the map to a hotspot zone
 	const focusHotspot = (coord) => {
@@ -3681,6 +3706,34 @@ export default function App() {
 						<div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
 							<h2 className="text-sm font-medium mb-2 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Admin</h2>
 							<div className="text-[11px] text-gray-600 dark:text-gray-300 mb-2">Moderate pothole reports and manage data (local-only).</div>
+							{/* Dashboard summary */}
+							<div className="mb-2 flex flex-wrap gap-1.5 text-[10px]">
+								<span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold">Total {adminQueue.total}</span>
+								{adminQueue.byStatus.map((l) => (
+									<span key={l.status} className="px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: (STATUS_STYLES[l.status] || STATUS_STYLES.reported).bg, color: (STATUS_STYLES[l.status] || STATUS_STYLES.reported).text }} title={`${l.label}: ${l.count}`}>
+										{l.label} {l.count}
+									</span>
+								))}
+								{adminQueue.pendingFix > 0 && (
+									<span className="px-2 py-0.5 rounded-full bg-indigo-600 text-white font-bold animate-pulse" title="Fix proofs awaiting review">{adminQueue.pendingFix} fix proof{adminQueue.pendingFix === 1 ? '' : 's'} to review</span>
+								)}
+								{adminQueue.pendingRemoval > 0 && (
+									<span className="px-2 py-0.5 rounded-full bg-yellow-500 text-white font-bold" title="Deletion requests awaiting review">{adminQueue.pendingRemoval} removal request{adminQueue.pendingRemoval === 1 ? '' : 's'}</span>
+								)}
+							</div>
+							{/* Status filter tabs */}
+							<div className="mb-2 flex flex-wrap gap-1 text-[10px]" role="group" aria-label="Filter reports by status">
+								{[{ key: 'all', label: 'All', count: adminQueue.total }, ...adminQueue.byStatus.map((l) => ({ key: l.status, label: l.label, count: l.count }))].map((f) => (
+									<button
+										key={f.key}
+										onClick={() => setAdminStatusFilter(f.key)}
+										aria-pressed={adminStatusFilter === f.key}
+										className={`px-2 py-1 rounded border transition-colors ${adminStatusFilter === f.key ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200 font-bold' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300'} ${f.count === 0 && adminStatusFilter !== f.key ? 'opacity-50' : ''}`}
+									>
+										{f.label} ({f.count})
+									</button>
+								))}
+							</div>
 							<div className="mb-3 flex items-center gap-3 text-xs">
 								<label className="inline-flex items-center gap-2 border border-gray-300 dark:border-gray-700 rounded px-2 py-1">
 									<input type="checkbox" checked={showOnlyUnverified} onChange={(e) => setShowOnlyUnverified(e.target.checked)} />
@@ -3699,9 +3752,11 @@ export default function App() {
 							</div>
 							{userReports.length === 0 ? (
 								<div className="text-[11px] text-gray-500">No reports.</div>
+							) : adminSortedReports.length === 0 ? (
+								<div className="text-[11px] text-gray-500">No reports match this filter.</div>
 							) : (
 								<ul className="max-h-48 overflow-auto divide-y divide-gray-200 dark:divide-gray-700 text-[11px]">
-									{userReports.slice().reverse().map((r) => (
+									{adminSortedReports.map((r) => (
 										<li key={r.id} className="py-2 flex items-start gap-2">
 											<div className="min-w-0 flex-1">
 												<div className="font-medium truncate">{r.description || '(no description)'} {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="ml-1 px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
