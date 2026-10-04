@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -25,6 +25,7 @@ import {
   saveTripHistory,
   tripSummary,
 } from "./utils/tripHistory";
+import { computeSafetyAnalytics, ANALYTICS_CONFIG } from "./utils/analytics";
 import {
   normalizeStatus,
   nextStatuses,
@@ -931,6 +932,13 @@ export default function App() {
 
 	// Aggregate trip history stats (basis for the trips panel and analytics)
 	const tripStats = useMemo(() => tripSummary(tripHistory), [tripHistory]);
+
+	// Safety analytics snapshot (hazards + trend + trips, all real stored data)
+	const [showAnalytics, setShowAnalytics] = useState(false);
+	const safetyAnalytics = useMemo(
+		() => computeSafetyAnalytics({ reports: userReports, trips: tripHistory }),
+		[userReports, tripHistory]
+	);
 
 	// Fly the map to a hotspot zone
 	const focusHotspot = (coord) => {
@@ -2782,6 +2790,14 @@ export default function App() {
 						<List className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Trips{tripHistory.length > 0 ? ` (${tripHistory.length})` : ''}</span>
 					</button>
+					<button
+						onClick={() => setShowAnalytics((v) => !v)}
+						aria-expanded={showAnalytics}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showAnalytics ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<BarChart3 className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Analytics</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -2913,6 +2929,76 @@ export default function App() {
 									})}
 								</ul>
 							)}
+						</div>
+					)}
+					{/* Safety analytics */}
+					{showAnalytics && (
+						<div className="mt-4 rounded-2xl border-2 border-teal-200 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-900/20 p-4" role="region" aria-label="Safety analytics">
+							<div className="flex items-center justify-between mb-3">
+								<h3 className="text-sm font-semibold text-teal-800 dark:text-teal-200">Safety analytics</h3>
+								<button onClick={() => setShowAnalytics(false)} className="text-xs text-teal-700 dark:text-teal-300 underline">Hide</button>
+							</div>
+							{/* KPI cards */}
+							<div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+								{[
+									{ label: 'Active hazards', value: safetyAnalytics.hazards.active, color: '#d97706' },
+									{ label: 'Fixed', value: safetyAnalytics.hazards.fixed, color: '#16a34a' },
+									{ label: 'Fix rate', value: safetyAnalytics.hazards.fixRate == null ? '—' : `${safetyAnalytics.hazards.fixRate}%`, color: '#0f766e' },
+									{ label: `Last ${ANALYTICS_CONFIG.recentDays}d reports`, value: safetyAnalytics.hazards.recentCount, color: '#2563eb' },
+									{ label: 'Trips taken', value: safetyAnalytics.trips.tripCount, color: '#7c3aed' },
+									{ label: 'Avg trip safety', value: safetyAnalytics.trips.avgSafety ?? '—', color: '#4f46e5' },
+								].map((k) => (
+									<div key={k.label} className="rounded-xl bg-white dark:bg-gray-900 border border-teal-200 dark:border-teal-800 px-3 py-2">
+										<div className="text-lg font-bold" style={{ color: k.color }}>{k.value}</div>
+										<div className="text-[10px] uppercase tracking-wide text-gray-500 dark:text-gray-400">{k.label}</div>
+									</div>
+								))}
+							</div>
+							{/* Weekly report trend */}
+							<div className="rounded-xl bg-white dark:bg-gray-900 border border-teal-200 dark:border-teal-800 p-3 mb-3">
+								<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Reports per week (last 8 weeks)</div>
+								<ResponsiveContainer width="100%" height={130}>
+									<LineChart data={safetyAnalytics.trend} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+										<CartesianGrid strokeDasharray="3 3" strokeOpacity={0.3} />
+										<XAxis dataKey="label" tick={{ fontSize: 10 }} />
+										YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+										<Tooltip />
+										<Line type="monotone" dataKey="count" stroke="#0d9488" strokeWidth={2} dot={{ r: 3 }} />
+									</LineChart>
+								</ResponsiveContainer>
+							</div>
+							{/* Lifecycle + severity */}
+							<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+								<div>
+									<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Hazard lifecycle</div>
+									<div className="flex flex-wrap gap-1.5">
+										{safetyAnalytics.lifecycle.map((l) => {
+											const sty = STATUS_STYLES[l.status] || STATUS_STYLES.reported;
+											return (
+												<span key={l.status} className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ backgroundColor: sty.bg, color: sty.text }} title={`${l.label}: ${l.count}`}>
+													{l.label}: {l.count}
+												</span>
+											);
+										})}
+									</div>
+								</div>
+								<div>
+									<div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">Severity mix (all reports)</div>
+									<div className="flex flex-wrap gap-1.5">
+										{[
+											{ label: 'High', value: safetyAnalytics.hazards.severity.high, color: '#dc2626' },
+											{ label: 'Moderate', value: safetyAnalytics.hazards.severity.moderate, color: '#d97706' },
+											{ label: 'Low', value: safetyAnalytics.hazards.severity.low, color: '#16a34a' },
+											{ label: 'Other', value: safetyAnalytics.hazards.severity.other, color: '#6b7280' },
+										].map((s) => (
+											<span key={s.label} className="text-[10px] font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: s.color }}>
+												{s.label}: {s.value}
+											</span>
+										))}
+									</div>
+									<div className="mt-1.5 text-[10px] text-gray-500 dark:text-gray-400">Totals are derived only from your stored reports and trips.</div>
+								</div>
+							</div>
 						</div>
 					)}
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
