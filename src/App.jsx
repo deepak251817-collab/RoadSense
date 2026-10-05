@@ -129,6 +129,9 @@ export default function App() {
 	const [adminStatusFilter, setAdminStatusFilter] = useState('all'); // admin worklist: 'all' | lifecycle status
 	// Admin mode (simple local toggle with optional PIN)
 	const [adminMode, setAdminMode] = useState(false);
+	const [adminPinOpen, setAdminPinOpen] = useState(false);
+	const [adminPinValue, setAdminPinValue] = useState('');
+	const [adminPinError, setAdminPinError] = useState('');
 	// Admin-to-user messages (persisted)
 	const [adminMessages, setAdminMessages] = useState([]); // { id, reportId, message, createdAt }
 	const [showMessages, setShowMessages] = useState(false);
@@ -2394,12 +2397,15 @@ export default function App() {
 					<button
 						onClick={() => {
 							if (!adminMode) {
-								const pin = prompt("Enter admin PIN (demo: 1234)");
-								if (pin === "1234") setAdminMode(true); else alert("Invalid PIN");
+								setAdminPinValue('');
+								setAdminPinError('');
+								setAdminPinOpen(true);
 							} else {
 								setAdminMode(false);
 							}
 						}}
+						aria-expanded={adminMode}
+						aria-haspopup="dialog"
 						className={`ml-2 flex items-center gap-2 text-sm px-4 py-2 rounded-full transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105 ${adminMode ? 'bg-white/30 font-bold border-2 border-white/50' : 'bg-white/10 hover:bg-white/20 border border-white/30'}`}
 					>
 						<ShieldCheck className="w-4 h-4" /> {adminMode ? 'Admin Mode' : 'Admin'}
@@ -2423,6 +2429,46 @@ export default function App() {
 		<HazardAlertStack alerts={hazardAlerts.alerts} onDismiss={hazardAlerts.dismiss} />
 
 			{/* Global modals */}
+			{/* Admin PIN dialog (in-app; native prompt/alert are unreliable) */}
+			{adminPinOpen && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Admin sign in">
+					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAdminPinOpen(false)} />
+					<form
+						className="relative z-10 w-full max-w-sm bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200"
+						onSubmit={(e) => {
+							e.preventDefault();
+							if (adminPinValue === '1234') {
+								setAdminMode(true);
+								setAdminPinOpen(false);
+								setAdminPinValue('');
+								setAdminPinError('');
+							} else {
+								setAdminPinError('Invalid PIN. Try 1234.');
+							}
+						}}
+					>
+						<h3 className="text-base font-bold mb-1 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Admin sign in</h3>
+						<div className="text-xs text-gray-600 dark:text-gray-300 mb-3">Enter the admin PIN to unlock the moderation dashboard. (demo: 1234)</div>
+						<input
+							type="password"
+							inputMode="numeric"
+							autoFocus
+							value={adminPinValue}
+							onChange={(e) => { setAdminPinValue(e.target.value); setAdminPinError(''); }}
+							aria-label="Admin PIN"
+							aria-invalid={adminPinError ? 'true' : undefined}
+							aria-describedby={adminPinError ? 'admin-pin-error' : undefined}
+							className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm tracking-widest focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+							placeholder="••••"
+						/>
+						{adminPinError && <div id="admin-pin-error" role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{adminPinError}</div>}
+						<div className="mt-4 flex justify-end gap-2">
+							<button type="button" onClick={() => { setAdminPinOpen(false); setAdminPinValue(''); setAdminPinError(''); }} className="px-4 py-2 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
+							<button type="submit" className="px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md">Unlock</button>
+						</div>
+					</form>
+				</div>
+			)}
 			{/* Reject modal */}
 			{rejectModal.open && (
 				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Reject hazard report">
