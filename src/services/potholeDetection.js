@@ -279,18 +279,24 @@ export function validateReportCoord(coord) {
  *
  * The app ships NO trained pothole-detection model. The default detector
  * below is an explicit rule-based stub that never claims a detection — user-
- * assigned severity remains the source of truth. To connect a real model
- * (YOLO/ONNX in the browser, or a remote inference API), register it at
- * startup:
+ * assigned severity remains the source of truth.
+ *
+ * Primary API: detectPotholes(image) → { detections: [{boundingBox,
+ * confidence, severity}], ... }. It is backend-agnostic and supports future
+ * registrations of YOLO / YOLOv8 / YOLOv11, ONNX Runtime, TensorFlow.js or
+ * a remote inference API (see createRemoteDetector):
  *
  *   registerPotholeDetector({
  *     id: "yolo-v8-potholes",
  *     kind: "ai",                       // "ai" only for a trained model
- *     detect: async (image) => ({ detected, confidence, severity, boxes }),
+ *     detect: async (image) => ({
+ *       detections: [{ boundingBox: {x, y, width, height}, confidence, severity }],
+ *     }),
  *   });
  *
- * detectPothole() normalizes and validates whatever the detector returns so
- * the UI can trust the shape without trusting the model.
+ * detectPotholes() normalizes and validates whatever the detector returns so
+ * the UI can trust the shape without trusting the model. It never invents a
+ * bounding box: detections without valid geometry keep boundingBox: null.
  * ========================================================================== */
 
 export const DETECTOR_INFO = {
@@ -360,15 +366,140 @@ export async function detectPothole(image) {
       boxes: Array.isArray(raw?.boxes) ? raw.boxes : [],
       detector: { id: detector.id, kind: detector.kind },
       ...(raw?.note ? { note: String(raw.note) } : {}),
-    };
-  } catch (e) {
+    };	} catch (e) {
+		return {
+			detected: false,
+			confidence: 0,
+			severity: null,
+			boxes: [],
+			detector: { id: detector.id, kind: detector.kind },
+			error: e?.message || "Pothole detector failed",
+		};
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Multi-detection facade (spec API: detectPotholes)
+ * ------------------------------------------------------------------ */
+
+/** Normalize one raw detection into {boundingBox, confidence, severity}. */
+function normalizeDetection(d) {
+  if (!d || typeof d !== "object") return null;
+  const b = d.boundingBox ?? d.bbox ?? d.box ?? null;
+  let boundingBox = null;
+  if (Array.isArray(b) && b.length >= 4) {
+    const [x, y, width, height] = b.map(Number);
+    if ([x, y, width, height].every(Number.isFinite)) boundingBox = { x, y, width, height };
+  } else if (b && typeof b === "object") {
+    const x = Number(b.x), y = Number(b.y), width = Number(b.width), height = Number(b.height);
+    if ([x, y, width, height].every(Number.isFinite)) boundingBox = { x, y, width, height };
+  }
+  const confidence = clamp01(Number(d.confidence));
+  const sevRaw = d.severity != null ? String(d.severity).toLowerCase() : null;
+  const severity = sevRaw ? SEVERITY_MAP[sevRaw] || null : null;
+  if (confidence <= 0 && !boundingBox) return null; // drop meaningless entries
+  return { boundingBox, confidence, severity };
+}
+
+/**
+ * Run pothole detection on an image (primary Phase-7 interface).
+ *
+ * Backend-agnostic: works with any registered detector — an in-browser
+ * YOLO/YOLOv8/YOLOv11 or ONNX Runtime model, a TensorFlow.js graph, or a
+ * remote inference API (createRemoteDetector). When no real model is
+ * registered the bundled stub answers honestly: available=false, zero
+ * detections, no fabricated boxes.
+ *
+ * @param {string|Blob|ImageBitmap} image input accepted by the detector
+ * @returns {Promise<{detections:Array<{boundingBox:Object|null, confidence:number, severity:string|null}>,
+ *   available:boolean, detected:boolean, confidence:number, severity:string|null,
+ *   detector:{id:string,kind:string}, note?:string, error?:string}>}
+ *   `confidence`/`severity` mirror the strongest detection for backward
+ *   compatibility with stored report records.
+ */
+export async function detectPotholes(image) {
+  const detector = getActiveDetector();
+  const isStub = detector.kind !== "ai";
+  if (isStub) {
+    // Stub: honest "no model" answer, never fabricates detections.
     return {
+      detections: [],
+      available: false,
       detected: false,
       confidence: 0,
       severity: null,
-      boxes: [],
+      detector: { id: detector.id, kind: detector.kind },
+      note: "No trained pothole detection model is configured; severity is user-assigned.",
+    };
+  }
+  try {
+    const raw = await detector.detect(image);
+    let list = [];
+    if (Array.isArray(raw?.detections)) {
+      list = raw.detections;
+    } else if (Array.isArray(raw?.boxes)) {
+      // Legacy single/loose shape: boxes + top-level confidence/severity
+      list = raw.boxes.map((bbox) => ({
+        boundingBox: bbox,
+        confidence: raw.confidence,
+        severity: raw.severity,
+      }));
+      if (!list.length && raw?.detected) {
+        list = [{ boundingBox: raw.boundingBox ?? null, confidence: raw.confidence, severity: raw.severity }];
+      }
+    }
+    const detections = list.map(normalizeDetection).filter(Boolean);
+    const topConfidence = detections.length ? Math.max(...detections.map((d) => d.confidence)) : 0;
+    const topSeverity =
+      detections.find((d) => d.severity === "HIGH")?.severity ??
+      detections.find((d) => d.severity === "MEDIUM")?.severity ??
+      detections.find((d) => d.severity === "LOW")?.severity ?? null;
+    return {
+      detections,
+      available: true,
+      detected: detections.length > 0,
+      confidence: topConfidence,
+      severity: topSeverity,
+      detector: { id: detector.id, kind: detector.kind },
+      ...(raw?.note ? { note: String(raw.note) } : {}),
+    };
+  } catch (e) {
+    return {
+      detections: [],
+      available: true,
+      detected: false,
+      confidence: 0,
+      severity: null,
       detector: { id: detector.id, kind: detector.kind },
       error: e?.message || "Pothole detector failed",
     };
   }
+}
+
+/**
+ * Helper for a remote inference API backend (e.g. a YOLO service):
+ * POSTs the image as multipart/form-data and expects a detectPotholes-style
+ * JSON body back. Nothing is registered or called unless the app explicitly
+ * registers the returned detector with a real endpoint.
+ *
+ * @param {Object} opts
+ * @param {string} opts.endpoint HTTPS endpoint accepting the upload
+ * @param {string} [opts.id] detector id
+ * @param {string} [opts.fieldName] form field name for the image
+ * @param {Object} [opts.headers] extra request headers
+ * @returns {{id:string, kind:string, detect:Function}}
+ */
+export function createRemoteDetector({ endpoint, id = "remote-inference", fieldName = "image", headers = {} } = {}) {
+  if (!endpoint) throw new Error("createRemoteDetector: endpoint is required");
+  return {
+    id,
+    kind: "ai",
+    async detect(image) {
+      const form = new FormData();
+      form.append(fieldName, image instanceof Blob ? image : String(image));
+      const res = await fetch(endpoint, { method: "POST", body: form, headers });
+      if (!res.ok) throw new Error(`Remote detector failed: HTTP ${res.status}`);
+      return await res.json();
+    },
+  };
 }

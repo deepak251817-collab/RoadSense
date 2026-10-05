@@ -9,7 +9,7 @@ import {
   downscaleImage,
   getBestLocation,
   processImageCoordinates,
-  detectPothole,
+  detectPotholes,
 } from "./services/potholeDetection";
 import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence } from "./utils/confidence";
@@ -492,7 +492,7 @@ export default function App() {
 			// result is kept; the bundled rule-based stub never fabricates one.
 			let detection = null;
 			try {
-				const det = await detectPothole(scaledUrl);
+				const det = await detectPotholes(scaledUrl);
 				if (det.detector.kind === "ai") detection = det;
 			} catch { /* detection is optional */ }
 			setReportForm((f) => ({ ...f, coord: res.coord, coordSource: res.source && res.source !== "none" ? res.source : null, detection }));
