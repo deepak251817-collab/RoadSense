@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -61,6 +61,14 @@ import MunicipalDashboard from "./components/MunicipalDashboard";
 import { summarizeMunicipal } from "./utils/municipalSummary";
 import WhatIfPanel from "./components/WhatIfPanel";
 import { runWhatIf } from "./utils/whatIf";
+import RoutePreferencesPanel from "./components/RoutePreferencesPanel";
+import {
+  ROUTE_PREFERENCES_LABEL,
+  recommendationConfigFor,
+  buildExcludeParam,
+  loadRoutePreferences,
+  saveRoutePreferences,
+} from "./utils/routePreferences";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -959,8 +967,20 @@ export default function App() {
 		});
 	}, [routes, userReports, showFixed, adminMode, trafficByRoute, routeWeather, routeIncidentResults, externalIncidents]);
 
-	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes
-	const recommendation = useMemo(() => recommendRoute(routeAnalyses), [routeAnalyses]);
+	// ---- Route preferences (persisted; utils/routePreferences) ----
+	const [showRoutePrefs, setShowRoutePrefs] = useState(false);
+	const [routePreferences, setRoutePreferences] = useState(() => loadRoutePreferences());
+	// Persist preference changes (best-effort)
+	useEffect(() => {
+		saveRoutePreferences(routePreferences);
+	}, [routePreferences]);
+
+	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes;
+	// the user's priority preference tunes the recommendation policy.
+	const recommendation = useMemo(
+		() => recommendRoute(routeAnalyses, recommendationConfigFor(routePreferences.priority)),
+		[routeAnalyses, routePreferences.priority]
+	);
 
 	// Data-driven explanations for the recommendation (only real metric differences)
 	const recommendationReasons = useMemo(() => buildRecommendationReasons(routeAnalyses, recommendation), [routeAnalyses, recommendation]);
@@ -1241,10 +1261,24 @@ export default function App() {
 			const coordsList = [sourceCoord, ...stops, destCoord]
 				.map((c) => `${c[0]},${c[1]}`)
 				.join(";");
-			const url = `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordsList}?alternatives=true&geometries=geojson&overview=full&steps=true&access_token=${mapboxgl.accessToken}`;
-			const res = await fetchWithTimeout(url, { timeoutMs: 12000, retries: 1 });
-			const data = await res.json();
-			const routesData = data?.routes ?? [];
+			const baseQuery = `alternatives=true&geometries=geojson&overview=full&steps=true`;
+			// Route preferences: real Mapbox exclusion, retried without it on failure
+			const exclude = buildExcludeParam(routePreferences);
+			const buildUrl = (ex) => `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordsList}?${baseQuery}${ex ? `&exclude=${encodeURIComponent(ex)}` : ""}&access_token=${mapboxgl.accessToken}`;
+			let res = await fetchWithTimeout(buildUrl(exclude), { timeoutMs: 12000, retries: 1 });
+			let data = res.ok ? await res.json() : null;
+			let routesData = data?.routes ?? [];
+			if (exclude && (!res.ok || !routesData.length)) {
+				// Graceful degradation: the exclusion may be unsupported for this
+				// route/profile — never lose the routes over a preference.
+				res = await fetchWithTimeout(buildUrl(null), { timeoutMs: 12000, retries: 1 });
+				data = res.ok ? await res.json() : null;
+				routesData = data?.routes ?? [];
+				if (routesData.length) {
+					setNotice({ type: 'info', message: 'Road avoidance could not be applied for this route — showing normal routes.' });
+					setTimeout(() => setNotice(null), 4000);
+				}
+			}
 			if (!routesData.length) {
 				setMapError("No routes found between these points.");
 				return;
@@ -3194,6 +3228,15 @@ export default function App() {
 						<FlaskConical className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Simulate</span>
 					</button>
+					<button
+						onClick={() => setShowRoutePrefs((v) => !v)}
+						aria-expanded={showRoutePrefs}
+						title="Route preferences: priority and road avoidance"
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showRoutePrefs ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Preferences</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3270,6 +3313,17 @@ export default function App() {
 					<RoadHealthPanel show={showRoadHealth} health={roadHealth} onClose={() => setShowRoadHealth(false)} />
 					{/* Change detection vs stored baseline */}
 					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
+					{/* Route preferences (priority + avoidance) */}
+					<RoutePreferencesPanel
+						show={showRoutePrefs}
+						preferences={routePreferences}
+						onChange={setRoutePreferences}
+						onClose={() => setShowRoutePrefs(false)}
+						onApplyRoutes={() => {
+							// Exclusion changed → refresh routes if we already have them
+							if (sourceCoord && destCoord && routes?.length) getRoutes();
+						}}
+					/>
 					{/* What-if repair simulation (scenario) */}
 					<WhatIfPanel
 						show={showWhatIf}
