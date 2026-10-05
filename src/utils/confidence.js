@@ -24,6 +24,25 @@ export const CONFIDENCE_LEVELS = {
   LOW: { label: "LOW CONFIDENCE", color: "#6b7280" },
 };
 
+/**
+ * Location confidence for a report's coordinate source — used by the report
+ * workflow so location confidence is always shown SEPARATELY from any AI
+ * detection confidence.
+ */
+export const LOCATION_CONFIDENCE_META = {
+  gps: { level: "HIGH", label: "High — live device GPS", color: "#15803d" },
+  exif: { level: "HIGH", label: "High — photo EXIF geotag", color: "#15803d" },
+  ocr: { level: "MEDIUM", label: "Medium — read from image overlay (OCR)", color: "#d97706" },
+  "map-pick": { level: "MEDIUM", label: "Medium — placed on map", color: "#d97706" },
+  none: { level: "LOW", label: "Low — no location yet", color: "#6b7280" },
+  unknown: { level: "LOW", label: "Low — unknown source", color: "#6b7280" },
+};
+
+/** @param {string|null} source coordSource of the report */
+export function locationConfidence(source) {
+  return LOCATION_CONFIDENCE_META[source] || LOCATION_CONFIDENCE_META.unknown;
+}
+
 /** Where a report's coordinate came from, ranked by trustworthiness. */
 const LOCATION_QUALITY = {
   gps: 20, // live device GPS (camera flow)

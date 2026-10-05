@@ -12,7 +12,7 @@ import {
   detectPotholes,
 } from "./services/potholeDetection";
 import { clusterReports } from "./utils/clustering";
-import { assessReportConfidence } from "./utils/confidence";
+import { assessReportConfidence, locationConfidence } from "./utils/confidence";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
@@ -3675,11 +3675,29 @@ export default function App() {
 										)}
 									</div>
 								)}
-								{reportForm.detection && (
-									<div className="mt-1 text-[10px] text-indigo-800 dark:text-indigo-200 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded px-2 py-1">
-										Model analysis: {reportForm.detection.detected ? `pothole detected · confidence ${Math.round((reportForm.detection.confidence || 0) * 100)}%` : "no pothole detected"}{reportForm.detection.severity ? ` · ${reportForm.detection.severity}` : ""} · assistive only
-									</div>
-								)}
+								{reportForm.photoPreview && (() => {
+									const locConf = locationConfidence(reportForm.coordSource);
+									const det = reportForm.detection;
+									return (
+										<div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 space-y-0.5" role="group" aria-label="Image analysis workflow">
+											<div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Image analysis</div>
+											<div className="text-[10px] text-gray-600 dark:text-gray-300">
+												{ocrBusy ? "⋯ Validating image and extracting location…" : "✓ Image validated"}
+											</div>
+											<div className="text-[10px]" style={{ color: reportForm.coord ? locConf.color : "#6b7280" }}>
+												● Location confidence: {locConf.label}
+											</div>
+											<div className="text-[10px] text-indigo-700 dark:text-indigo-300">
+												{det && det.detected
+													? `● AI detection confidence: ${Math.round((det.confidence || 0) * 100)}%${det.severity ? ` · ${det.severity}` : ""} · ${det.detections?.length || 1} finding(s) · assistive only`
+													: "● AI detection: no model configured — manual confirmation below"}
+											</div>
+											<div className="text-[10px] text-gray-600 dark:text-gray-300">
+												● Severity (confirmed by you): <span className="font-semibold uppercase">{reportForm.severity}</span>
+											</div>
+										</div>
+									);
+								})()}
 							</div>
 
 							{/* Submit */}
