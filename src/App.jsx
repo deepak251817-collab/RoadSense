@@ -132,6 +132,7 @@ export default function App() {
 	// Avoidance feature removed for now
 	const [showOnlyUnverified, setShowOnlyUnverified] = useState(false); // admin filter: only unverified
 	const [adminStatusFilter, setAdminStatusFilter] = useState('all'); // admin worklist: 'all' | lifecycle status
+	const [noteDrafts, setNoteDrafts] = useState({}); // reportId -> draft admin note
 	// Admin mode (simple local toggle with optional PIN)
 	const [adminMode, setAdminMode] = useState(false);
 	const [adminPinOpen, setAdminPinOpen] = useState(false);
@@ -1582,6 +1583,7 @@ export default function App() {
 					reportedToBBMP: Boolean(r.reportedToBBMP) || false,
 					coordSource: r.coordSource || null,
 					type: r.type || DEFAULT_HAZARD_TYPE, // backfill legacy pothole-only reports
+					adminNotes: Array.isArray(r.adminNotes) ? r.adminNotes : [],
 					detection: r.detection || null,
 				}));
 				setUserReports(normalized);
@@ -1912,6 +1914,20 @@ export default function App() {
 			persistReports(arr);
 			return arr;
 		});
+	};
+
+	// Admin notes: timestamped remarks attached to a report (Phase 10)
+	const addAdminNote = (id, text) => {
+		const t = String(text || '').trim();
+		if (!t) return;
+		setUserReports((prev) => {
+			const arr = prev.map((x) => x.id === id
+				? { ...x, adminNotes: [...(Array.isArray(x.adminNotes) ? x.adminNotes : []), { id: Date.now(), text: t.slice(0, 300), at: Date.now() }] }
+				: x);
+			persistReports(arr);
+			return arr;
+		});
+		setNoteDrafts((d) => ({ ...d, [id]: '' }));
 	};
 
 	// Allow user to edit severity level of their report
@@ -3882,6 +3898,26 @@ export default function App() {
 															<option value="moderate">Moderate</option>
 															<option value="high">High</option>
 														</select>
+													</div>
+													{/* Admin notes (Phase 10) */}
+													{(r.adminNotes || []).length > 0 && (
+														<ul className="w-full mt-1 space-y-0.5">
+															{r.adminNotes.slice(-2).map((n) => (
+																<li key={n.id} className="text-[10px] text-gray-500 dark:text-gray-400">📝 {n.text} <span className="opacity-70">— {new Date(n.at).toLocaleString()}</span></li>
+															))}
+															{r.adminNotes.length > 2 && <li className="text-[10px] text-gray-400">+{r.adminNotes.length - 2} earlier note(s)</li>}
+														</ul>
+													)}
+													<div className="w-full flex gap-2">
+														<input
+															value={noteDrafts[r.id] || ''}
+															onChange={(e) => setNoteDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+															onKeyDown={(e) => { if (e.key === 'Enter') addAdminNote(r.id, noteDrafts[r.id]); }}
+															placeholder="Admin note…"
+															aria-label={`Admin note for report ${r.id}`}
+															className="text-[11px] border border-gray-300 dark:border-gray-700 rounded px-2 py-0.5 bg-white dark:bg-gray-900 flex-1 min-w-0"
+														/>
+														<button onClick={() => addAdminNote(r.id, noteDrafts[r.id])} className="px-2 py-0.5 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-[11px] whitespace-nowrap">Add note</button>
 													</div>
 												</div>
 											</div>
