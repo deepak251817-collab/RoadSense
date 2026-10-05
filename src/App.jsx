@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -47,6 +47,14 @@ import NightSafetyPanel from "./components/NightSafetyPanel";
 import { assessNightSafety } from "./utils/nightSafety";
 import RoadHealthPanel from "./components/RoadHealthPanel";
 import { roadHealthIndex } from "./utils/roadHealth";
+import ChangeDetectionPanel from "./components/ChangeDetectionPanel";
+import {
+  detectChanges,
+  captureReportSnapshot,
+  mergeChangeSnapshot,
+  loadChangeSnapshots,
+  saveChangeSnapshots,
+} from "./utils/changeDetection";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1040,6 +1048,25 @@ export default function App() {
 	const [showRoadHealth, setShowRoadHealth] = useState(false);
 	const roadHealth = useMemo(() => roadHealthIndex({ reports: userReports }), [userReports]);
 
+	// ---- Change detection vs stored baseline (utils/changeDetection) ----
+	const [showChanges, setShowChanges] = useState(false);
+	const [reportsReady, setReportsReady] = useState(false); // localStorage load finished
+	const [changeSnapshots, setChangeSnapshots] = useState(() => loadChangeSnapshots());
+	// Keep the daily baseline snapshot in sync (once per day / on real change)
+	useEffect(() => {
+		if (!reportsReady) return;
+		setChangeSnapshots((prev) => {
+			const next = mergeChangeSnapshot(prev, captureReportSnapshot(userReports));
+			if (next === prev) return prev;
+			saveChangeSnapshots(next);
+			return next;
+		});
+	}, [reportsReady, userReports]);
+	const changes = useMemo(
+		() => detectChanges({ snapshots: changeSnapshots, reports: userReports }),
+		[changeSnapshots, userReports]
+	);
+
 	// ---- Segment-level risk analysis for the selected route ----
 	const [showSegments, setShowSegments] = useState(false);
 
@@ -1661,6 +1688,8 @@ export default function App() {
 			const suv = localStorage.getItem('showOnlyUnverified');
 			if (suv != null) setShowOnlyUnverified(suv === 'true');
 		} catch { }
+		// Baseline snapshots may only be written after the real data is in
+		setReportsReady(true);
 	}, []);
 
 	// Persist showFixed preference
@@ -3104,6 +3133,15 @@ export default function App() {
 						<Activity className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Road Health</span>
 					</button>
+					<button
+						onClick={() => setShowChanges((v) => !v)}
+						aria-expanded={showChanges}
+						title="Show what changed in the hazard database since the baseline"
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showChanges ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<GitCompareArrows className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Changes</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3178,6 +3216,8 @@ export default function App() {
 					<NightSafetyPanel show={showNight} assessment={nightSafety} onClose={() => setShowNight(false)} />
 					{/* Road health index (report-based) */}
 					<RoadHealthPanel show={showRoadHealth} health={roadHealth} onClose={() => setShowRoadHealth(false)} />
+					{/* Change detection vs stored baseline */}
+					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
