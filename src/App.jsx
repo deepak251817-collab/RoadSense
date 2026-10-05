@@ -57,6 +57,8 @@ import {
 } from "./utils/changeDetection";
 import RepairPriorityPanel from "./components/RepairPriorityPanel";
 import { rankRepairs } from "./utils/repairPriority";
+import MunicipalDashboard from "./components/MunicipalDashboard";
+import { summarizeMunicipal } from "./utils/municipalSummary";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1072,6 +1074,13 @@ export default function App() {
 	// ---- Repair priority ranking (utils/repairPriority) ----
 	const [showPriority, setShowPriority] = useState(false);
 	const rankedRepairs = useMemo(() => rankRepairs(userReports), [userReports]);
+
+	// ---- Municipal dashboard (admin-only; utils/municipalSummary) ----
+	const [showMunicipal, setShowMunicipal] = useState(false);
+	const municipalSummary = useMemo(
+		() => summarizeMunicipal({ reports: userReports, snapshots: changeSnapshots }),
+		[userReports, changeSnapshots]
+	);
 
 	// ---- Segment-level risk analysis for the selected route ----
 	const [showSegments, setShowSegments] = useState(false);
@@ -3970,6 +3979,25 @@ export default function App() {
 						<div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
 							<h2 className="text-sm font-medium mb-2 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Admin</h2>
 							<div className="text-[11px] text-gray-600 dark:text-gray-300 mb-2">Moderate pothole reports and manage data (local-only).</div>
+							<div className="mb-2">
+								<button
+									onClick={() => setShowMunicipal((v) => !v)}
+									aria-expanded={showMunicipal}
+									className={`px-2 py-1 rounded border text-[11px] transition-colors ${showMunicipal ? 'border-slate-600 bg-slate-600 text-white font-bold' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
+								>
+									Municipal dashboard
+								</button>
+							</div>
+							{/* Municipal dashboard (admin-only overview) */}
+							<MunicipalDashboard
+								show={showMunicipal}
+								summary={municipalSummary}
+								onClose={() => setShowMunicipal(false)}
+								onFocus={(report) => {
+									const map = window._mapInstance;
+									if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
+								}}
+							/>
 							{/* Dashboard summary */}
 							<div className="mb-2 flex flex-wrap gap-1.5 text-[10px]">
 								<span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold">Total {adminQueue.total}</span>
