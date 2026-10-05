@@ -16,6 +16,7 @@ export const DEFAULT_WEIGHTS = {
   incident: 0.12,
   accident: 0.14,
   time: 0.10,
+  roadCondition: 0.14,
 };
 
 /** Safety classification bands (inclusive ranges). */
@@ -287,4 +288,145 @@ export function classifySafetyScore(score) {
     SAFETY_BANDS.find((b) => s >= b.min && s <= b.max) ??
     SAFETY_BANDS[SAFETY_BANDS.length - 1]
   );
+}
+
+/* ------------------------------------------------------------------ *
+ * Centralized safety intelligence facade
+ * ------------------------------------------------------------------ */
+
+/** Human labels for every scoring factor. */
+export const FACTOR_LABELS = {
+  traffic: "Traffic",
+  pothole: "Potholes & surface",
+  weather: "Weather",
+  incident: "Road incidents",
+  accident: "Accidents",
+  time: "Time of day",
+  roadCondition: "Road condition",
+};
+
+/** Maps the public input keys of calculateRoadSafetyScore to weight keys. */
+const INPUT_FACTOR_KEYS = {
+  traffic: "traffic",
+  weather: "weather",
+  potholes: "pothole",
+  incidents: "incident",
+  accidents: "accident",
+  roadCondition: "roadCondition",
+  timeRisk: "time",
+};
+
+/** Confidence levels for an intelligence result (shared vocabulary). */
+export const CONFIDENCE_BANDS = [
+  { key: "high", label: "High", min: 80, color: "#15803d" },
+  { key: "medium", label: "Medium", min: 50, color: "#d97706" },
+  { key: "low", label: "Low", min: 1, color: "#6b7280" },
+  { key: "insufficient", label: "Insufficient Data", min: 0, color: "#9ca3af" },
+];
+
+/** Normalize a factor input value (number | {risk,...} | null) to a record. */
+function normalizeFactorInput(value) {
+  if (value == null) return { risk: null, available: false, estimated: false };
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? { risk: value, available: true, estimated: false }
+      : { risk: null, available: false, estimated: false };
+  }
+  if (typeof value === "object") {
+    const risk = Number.isFinite(value.risk) ? value.risk : null;
+    const available = value.available != null ? Boolean(value.available) && risk != null : risk != null;
+    return { risk: available ? risk : null, available, estimated: Boolean(value.estimated) };
+  }
+  return { risk: null, available: false, estimated: false };
+}
+
+/**
+ * Centralized road safety intelligence engine.
+ *
+ * Accepts structured input and returns a structured, explainable result.
+ * Unavailable factors are excluded (never guessed), so the confidence level
+ * communicates how much evidence backs the score.
+ *
+ * @param {Object} input
+ * @param {number|Object|null} [input.traffic]       traffic risk (0..100)
+ * @param {number|Object|null} [input.weather]       weather risk (0..100)
+ * @param {number|Object|null} [input.potholes]      pothole/surface risk (0..100)
+ * @param {number|Object|null} [input.incidents]     incident risk (0..100)
+ * @param {number|Object|null} [input.accidents]     accident risk (0..100)
+ * @param {number|Object|null} [input.roadCondition] road-condition risk (0..100)
+ * @param {number|Object|null} [input.timeRisk]      time-of-day risk (0..100)
+ * @param {Object} [opts]
+ * @param {Object} [opts.weights] override configurable weights
+ * @returns {{score:number, classification:Object, factors:Object, confidence:Object}}
+ */
+export function calculateRoadSafetyScore(input = {}, { weights = DEFAULT_WEIGHTS } = {}) {
+  const normalized = {};
+  for (const [publicKey, weightKey] of Object.entries(INPUT_FACTOR_KEYS)) {
+    if (publicKey in input) normalized[weightKey] = normalizeFactorInput(input[publicKey]);
+  }
+
+  const factorRisks = {};
+  for (const [key, rec] of Object.entries(normalized)) {
+    if (rec.available) factorRisks[key] = rec.risk;
+  }
+
+  const { score, missingFactors, weights: usedWeights } = calculateRouteSafetyScore(factorRisks, { weights });
+
+  // Explainable factor contributions: how much each available factor
+  // lowered the score (share of the weighted risk).
+  let weightTotal = 0;
+  for (const key of Object.keys(factorRisks)) weightTotal += usedWeights[key] ?? 0;
+  const factors = {};
+  for (const key of Object.keys(weights)) {
+    const rec = normalized[key];
+    const available = Boolean(rec && rec.available);
+    const weight = usedWeights[key] ?? weights[key];
+    const contribution =
+      available && weightTotal > 0 ? Math.round(((weight * factorRisks[key]) / weightTotal) * 10) / 10 : 0;
+    factors[key] = {
+      label: FACTOR_LABELS[key] ?? key,
+      risk: available ? factorRisks[key] : null,
+      weight,
+      contribution,
+      available,
+      estimated: Boolean(rec?.estimated),
+    };
+  }
+
+  // Confidence from evidence coverage: how many factors actually had data.
+  const considered = Object.keys(weights).length;
+  const availableCount = Object.keys(factorRisks).length;
+  const coverage = considered > 0 ? availableCount / considered : 0;
+  const hasEstimate = Object.values(factors).some((f) => f.available && f.estimated);
+
+  let band;
+  if (availableCount === 0) band = CONFIDENCE_BANDS[3]; // Insufficient Data
+  else if (coverage < 0.5) band = CONFIDENCE_BANDS[2]; // Low
+  else if (coverage < 0.8) band = CONFIDENCE_BANDS[1]; // Medium
+  else band = CONFIDENCE_BANDS[0]; // High
+  // An estimated core input (e.g. traffic inferred from route speeds) caps confidence at Medium.
+  if (band.key === "high" && hasEstimate) band = CONFIDENCE_BANDS[1];
+
+  const reasons = [];
+  for (const f of Object.values(factors)) {
+    if (f.available) reasons.push(`${f.estimated ? "⚠" : "✓"} ${f.label}${f.estimated ? " (estimated)" : " data available"}`);
+  }
+  for (const key of missingFactors) {
+    reasons.push(`⚠ ${FACTOR_LABELS[key] ?? key} unavailable`);
+  }
+
+  return {
+    score,
+    classification: classifySafetyScore(score),
+    factors,
+    confidence: {
+      level: band.key,
+      label: band.label,
+      color: band.color,
+      score: Math.round(coverage * 100),
+      availableFactors: availableCount,
+      totalFactors: considered,
+      reasons,
+    },
+  };
 }
