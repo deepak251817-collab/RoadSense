@@ -162,6 +162,11 @@ export default function App() {
 	// Map layer visibility toggles (Layers popover)
 	const [bbmpVisible, setBbmpVisible] = useState(true);
 	const [congestionVisible, setCongestionVisible] = useState(true);
+	// Road-risk segment overlay + marker visibility toggles (layers popover)
+	const [roadRiskOn, setRoadRiskOn] = useState(false);
+	const [weatherMarkersOn, setWeatherMarkersOn] = useState(true);
+	const [hazardMarkersOn, setHazardMarkersOn] = useState(true);
+	const [incidentMarkersOn, setIncidentMarkersOn] = useState(true);
 	const [layersMenuOpen, setLayersMenuOpen] = useState(false);
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
@@ -552,6 +557,8 @@ export default function App() {
 				try { if (bbmpLoaded) addBbmpLayer(); } catch { }
 				// Re-add safety heatmap if it was on
 				try { if (safetyHeatmapOn) renderSafetyHeatmap(); } catch { }
+				// Re-add road-risk segment overlay if it was on
+				try { renderRoadRiskLayer(); } catch { }
 			});
 		} catch (e) {
 			setNotice({ type: 'error', message: 'Failed to switch map style: ' + (e.message || e) });
@@ -656,7 +663,7 @@ export default function App() {
 			// eslint-disable-next-line no-underscore-dangle
 			window._mapInstance = map;
 			// Ensure any pre-existing stops are drawn once the style loads
-			try { map.on('load', () => { try { renderStopMarkers(); } catch { } try { renderSafetyHeatmap(); } catch { } }); } catch { }
+			try { map.on('load', () => { try { renderStopMarkers(); } catch { } try { renderSafetyHeatmap(); } catch { } try { renderRoadRiskLayer(); } catch { } }); } catch { }
 			// Attempt to start live location watch so user marker is always shown (permission based)
 			if (navigator.geolocation) {
 				// Wrap permission check in an async IIFE without making effect async
@@ -1240,6 +1247,7 @@ export default function App() {
 	const renderWeatherMarkersFor = (idx) => {
 		const map = window._mapInstance;
 		if (!map) return;
+		if (!weatherMarkersOn) return; // layer toggled off in layers popover
 		const weather = routeWeather[idx];
 		if (!weather || !weather.points?.length) return;
 		// Clear any existing markers for this route first
@@ -1714,6 +1722,85 @@ export default function App() {
 
 	useEffect(() => { renderSafetyHeatmap(); }, [safetyHeatmapOn, userReports, showFixed]);
 
+	// ---- Road risk layer: segment scores drawn over the selected route ----
+	const segmentPopupRef = useRef(null);
+	const roadRiskClickBoundRef = useRef(false);
+	const renderRoadRiskLayer = () => {
+		const map = window._mapInstance; if (!map) return;
+		try { if (map.getLayer('road-risk')) map.removeLayer('road-risk'); } catch { }
+		try { if (map.getSource('road-risk')) map.removeSource('road-risk'); } catch { }
+		if (!roadRiskOn || !routeSegments.length) return;
+		const data = {
+			type: 'FeatureCollection',
+			features: routeSegments.map((s) => ({
+				type: 'Feature',
+				geometry: { type: 'LineString', coordinates: s.coords },
+				properties: {
+					index: s.index,
+					score: s.score,
+					band: s.band.label,
+					lengthMeters: Math.round(s.lengthMeters),
+					traffic: s.traffic.available ? s.traffic.risk : '—',
+					trafficEstimated: s.traffic.estimated,
+					weather: s.weather.condition || '—',
+					reports: s.hazards.reports.length,
+					incidents: s.hazards.incidents.length,
+					confidence: s.confidence.label,
+					explanation: s.explanation.join(' | '),
+				},
+			})),
+		};
+		map.addSource('road-risk', { type: 'geojson', data });
+		map.addLayer({
+			id: 'road-risk',
+			type: 'line',
+			source: 'road-risk',
+			layout: { 'line-cap': 'round', 'line-join': 'round' },
+			paint: {
+				'line-width': 7,
+				'line-opacity': 0.92,
+				'line-color': ['match', ['get', 'band'],
+					'Safe', '#22c55e',
+					'Moderate', '#eab308',
+					'Risky', '#f97316',
+					'#ef4444'],
+			},
+		});
+		// Click a segment → score, hazards, traffic, weather, explanation
+		if (!roadRiskClickBoundRef.current) {
+			roadRiskClickBoundRef.current = true;
+			map.on('click', 'road-risk', (e) => {
+				const f = e.features?.[0]; if (!f) return;
+				try { e.originalEvent?.stopPropagation?.(); } catch { }
+				const p = f.properties || {};
+				try { segmentPopupRef.current?.remove(); } catch { }
+				const wrap = document.createElement('div');
+				wrap.style.maxWidth = '260px';
+				wrap.style.fontSize = '12px';
+				wrap.style.color = '#111827';
+				const BAND_COLORS = { Safe: '#22c55e', Moderate: '#eab308', Risky: '#f97316', 'High Risk': '#ef4444' };
+				const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+				wrap.innerHTML = `
+					<div style="font-weight:700;">Segment ${Number(p.index) + 1} · ${esc(p.lengthMeters)} m</div>
+					<div style="margin-top:2px;"><span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${BAND_COLORS[p.band] || '#6b7280'};color:#fff;font-weight:700;font-size:11px;">${esc(p.score)} — ${esc(p.band)}</span></div>
+					<div style="color:#4b5563;font-size:11px;margin-top:4px;">Traffic: ${esc(p.traffic)}${p.trafficEstimated === 'true' ? ' (est.)' : ''} · Weather: ${esc(p.weather)}</div>
+					<div style="color:#4b5563;font-size:11px;">Hazards: ${esc(p.reports)} · Incidents: ${esc(p.incidents)} · Confidence: ${esc(p.confidence)}</div>
+					<div style="margin-top:4px;color:#374151;font-size:11px;">${String(p.explanation || '').split(' | ').map((l) => `• ${esc(l)}`).join('<br>')}</div>`;
+				segmentPopupRef.current = new mapboxgl.Popup({ offset: 8, closeButton: true })
+					.setLngLat(e.lngLat)
+					.setDOMContent(wrap)
+					.addTo(map);
+			});
+		}
+	};
+	useEffect(() => { renderRoadRiskLayer(); }, [roadRiskOn, routeSegments, selectedRouteId]);
+
+	useEffect(() => {
+		if (openWeatherId == null) return;
+		if (weatherMarkersOn) renderWeatherMarkersFor(openWeatherId); else removeWeatherMarkersFor(openWeatherId);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [weatherMarkersOn]);
+
 	// Apply layer visibility toggles (Layers popover) to already-drawn layers
 	useEffect(() => {
 		const map = window._mapInstance; if (!map) return;
@@ -1845,6 +1932,7 @@ export default function App() {
 		userPotholePopupsRef.current.forEach((p) => { try { p.remove(); } catch { } });
 		userPotholeMarkersRef.current = [];
 		userPotholePopupsRef.current = [];
+		if (!hazardMarkersOn) return; // layer toggled off in layers popover
 	// Group nearby reports into hazard clusters (individual reports are preserved;
 	// the marker shows one pin per location instead of one pin per duplicate)
 	const visibleReports = userReports.filter((rep) => {
@@ -2248,7 +2336,7 @@ export default function App() {
 	// Re-render stop markers whenever the stops array changes
 	useEffect(() => { renderStopMarkers(stops); }, [stops]);
 
-	useEffect(() => { renderUserPotholeMarkers(); }, [userReports, showFixed, adminMode]);
+	useEffect(() => { renderUserPotholeMarkers(); }, [userReports, showFixed, adminMode, hazardMarkersOn]);
 
 	// --- Incident markers for the selected route ---
 	const renderIncidentMarkers = () => {
@@ -2258,7 +2346,7 @@ export default function App() {
 		incidentPopupsRef.current.forEach((p) => { try { p.remove(); } catch { } });
 		incidentMarkersRef.current = [];
 		incidentPopupsRef.current = [];
-		if (selectedRouteId == null || !routeIncidentResults?.length) return;
+		if (!incidentMarkersOn || selectedRouteId == null || !routeIncidentResults?.length) return;
 		const list = routeIncidentResults[Number(selectedRouteId)]?.incidents || [];
 		const SEV_COLOR = { low: '#eab308', medium: '#f59e0b', high: '#ef4444', critical: '#7f1d1d' };
 		for (const inc of list) {
@@ -2307,7 +2395,7 @@ export default function App() {
 	};
 
 	// Refresh incident markers when selection, incidents or underlying data change
-	useEffect(() => { renderIncidentMarkers(); }, [selectedRouteId, routeIncidentResults]);
+	useEffect(() => { renderIncidentMarkers(); }, [selectedRouteId, routeIncidentResults, incidentMarkersOn]);
 
 	// Removed manual map picking for user reports; coordinates will be extracted from photo EXIF geotag.
 
@@ -2985,12 +3073,16 @@ export default function App() {
 								open={layersMenuOpen}
 								onToggle={() => setLayersMenuOpen((v) => !v)}
 								bbmpLoaded={bbmpLoaded}
-								layers={[
-									{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
-									{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
-									{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
-									{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
-								]}
+							layers={[
+								{ label: 'Road Risk', checked: roadRiskOn, onChange: setRoadRiskOn },
+								{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
+								{ label: 'Weather', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
+								{ label: 'Potholes (user)', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
+								{ label: 'Incidents', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
+								{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
+								{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
+								{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
+							]}
 							/>
 							<button
 								onClick={() => setFullMap((v) => !v)}
