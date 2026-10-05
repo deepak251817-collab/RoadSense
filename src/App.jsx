@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -43,6 +43,8 @@ import PredictiveSafetyPanel from "./components/PredictiveSafetyPanel";
 import SegmentRiskStrip from "./components/SegmentRiskStrip";
 import WaterloggingPanel from "./components/WaterloggingPanel";
 import { assessWaterloggingRisk } from "./utils/waterlogging";
+import NightSafetyPanel from "./components/NightSafetyPanel";
+import { assessNightSafety } from "./utils/nightSafety";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1014,6 +1016,23 @@ export default function App() {
 		}
 		return { current, horizons: predictRoadRiskAllHorizons({ currentConditions: current, forecast }) };
 	}, [routes, routeAnalyses, selectedRouteId, routeForecast]);
+
+	// ---- Night safety (rule-based estimate; utils/nightSafety) ----
+	const [showNight, setShowNight] = useState(false);
+	const nightSafety = useMemo(() => {
+		if (!routes?.length) return null;
+		const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+		const route = routes[idx];
+		if (!route) return null;
+		const incidentResult = routeIncidentResults?.[idx];
+		return assessNightSafety({
+			route,
+			reports: userReports,
+			weatherPoints: routeWeather?.[idx]?.points || [],
+			incidents: incidentResult?.incidents ?? null,
+			incidentsAvailable: Array.isArray(incidentResult?.incidents),
+		});
+	}, [routes, selectedRouteId, userReports, routeWeather, routeIncidentResults]);
 
 	// ---- Segment-level risk analysis for the selected route ----
 	const [showSegments, setShowSegments] = useState(false);
@@ -3060,6 +3079,16 @@ export default function App() {
 						<CloudRain className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Flood</span>
 					</button>
+					<button
+						onClick={() => setShowNight((v) => !v)}
+						aria-expanded={showNight}
+						disabled={!routes?.length}
+						title={routes?.length ? 'Show night-safety estimate for the selected route' : 'Find routes first to see night safety'}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showNight ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						{nightSafety?.isNight ? <Moon className="w-4 h-4" aria-hidden="true" /> : <Sun className="w-4 h-4" aria-hidden="true" />}
+						<span className="font-medium">Night</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3130,6 +3159,8 @@ export default function App() {
 							if (!routeWeather[idx]) fetchWeatherForRoute(idx);
 						}}
 					/>
+					{/* Night-safety estimate (rule-based) */}
+					<NightSafetyPanel show={showNight} assessment={nightSafety} onClose={() => setShowNight(false)} />
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
