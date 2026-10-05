@@ -17,6 +17,7 @@ import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
 import { predictRoadRiskAllHorizons } from "./utils/prediction";
+import { analyzeRouteSegments } from "./utils/segmentRisk";
 import {
   tripSummary,
 } from "./utils/tripHistory";
@@ -38,6 +39,7 @@ import HotspotsPanel from "./components/HotspotsPanel";
 import TripsPanel from "./components/TripsPanel";
 import AnalyticsPanel from "./components/AnalyticsPanel";
 import PredictiveSafetyPanel from "./components/PredictiveSafetyPanel";
+import SegmentRiskStrip from "./components/SegmentRiskStrip";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1001,6 +1003,25 @@ export default function App() {
 		}
 		return { current, horizons: predictRoadRiskAllHorizons({ currentConditions: current, forecast }) };
 	}, [routes, routeAnalyses, selectedRouteId, routeForecast]);
+
+	// ---- Segment-level risk analysis for the selected route ----
+	const [showSegments, setShowSegments] = useState(false);
+	const routeSegments = useMemo(() => {
+		if (!routes?.length || selectedRouteId == null) return [];
+		const idx = Number(selectedRouteId);
+		const route = routes[idx];
+		if (!route?.geometry?.coordinates) return [];
+		const analysis = routeAnalyses[idx];
+		return analyzeRouteSegments(route, {
+			reports: userReports,
+			incidents: routeIncidentResults?.[idx]?.incidents ?? null,
+			showFixed,
+			adminMode,
+			weatherPoints: routeWeather?.[idx]?.points || [],
+			congestionSegments: trafficByRoute?.[idx]?.congestionSegments || [],
+			routeTraffic: analysis?.traffic || { risk: null, estimated: false, available: false },
+		});
+	}, [routes, selectedRouteId, routeAnalyses, userReports, showFixed, adminMode, routeWeather, routeIncidentResults, trafficByRoute]);
 
 	// Admin worklist stats: attention counters + per-status counts
 	const adminQueue = useMemo(() => ({
@@ -2881,6 +2902,16 @@ export default function App() {
 						<TrendingUp className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Predict</span>
 					</button>
+					<button
+						onClick={() => setShowSegments((v) => !v)}
+						aria-expanded={showSegments}
+						disabled={!routes?.length}
+						title={routes?.length ? 'Show per-segment road risk for the selected route' : 'Find routes first to see segment risk'}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showSegments ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<Gauge className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Segments</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -2939,6 +2970,8 @@ export default function App() {
 					<AnalyticsPanel show={showAnalytics} analytics={safetyAnalytics} onClose={() => setShowAnalytics(false)} />
 					{/* Predictive safety (rule-based estimate) */}
 					<PredictiveSafetyPanel show={showPredictive} prediction={predictive} onClose={() => setShowPredictive(false)} />
+					{/* Segment-level road risk (per-segment score, hazards, weather) */}
+					<SegmentRiskStrip show={showSegments} segments={routeSegments} onClose={() => setShowSegments(false)} />
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
