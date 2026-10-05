@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -59,6 +59,8 @@ import RepairPriorityPanel from "./components/RepairPriorityPanel";
 import { rankRepairs } from "./utils/repairPriority";
 import MunicipalDashboard from "./components/MunicipalDashboard";
 import { summarizeMunicipal } from "./utils/municipalSummary";
+import WhatIfPanel from "./components/WhatIfPanel";
+import { runWhatIf } from "./utils/whatIf";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1074,6 +1076,22 @@ export default function App() {
 	// ---- Repair priority ranking (utils/repairPriority) ----
 	const [showPriority, setShowPriority] = useState(false);
 	const rankedRepairs = useMemo(() => rankRepairs(userReports), [userReports]);
+
+	// ---- What-if simulation (scenario; utils/whatIf) ----
+	const [showWhatIf, setShowWhatIf] = useState(false);
+	const [whatIfMode, setWhatIfMode] = useState("all");
+	const whatIf = useMemo(() => {
+		if (!routes?.length) return null;
+		const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+		const route = routes[idx];
+		if (!route) return null;
+		return runWhatIf({
+			reports: userReports,
+			route,
+			baselineFactorRisks: routeAnalyses[idx]?.factorRisks || null,
+			mode: whatIfMode,
+		});
+	}, [routes, selectedRouteId, routeAnalyses, userReports, whatIfMode]);
 
 	// ---- Municipal dashboard (admin-only; utils/municipalSummary) ----
 	const [showMunicipal, setShowMunicipal] = useState(false);
@@ -3166,6 +3184,16 @@ export default function App() {
 						<Wrench className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Priority</span>
 					</button>
+					<button
+						onClick={() => setShowWhatIf((v) => !v)}
+						aria-expanded={showWhatIf}
+						disabled={!routes?.length}
+						title={routes?.length ? 'Simulate repair scenarios for the selected route' : 'Find routes first to run a simulation'}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showWhatIf ? 'border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<FlaskConical className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Simulate</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3242,6 +3270,14 @@ export default function App() {
 					<RoadHealthPanel show={showRoadHealth} health={roadHealth} onClose={() => setShowRoadHealth(false)} />
 					{/* Change detection vs stored baseline */}
 					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
+					{/* What-if repair simulation (scenario) */}
+					<WhatIfPanel
+						show={showWhatIf}
+						result={whatIf}
+						mode={whatIfMode}
+						onModeChange={setWhatIfMode}
+						onClose={() => setShowWhatIf(false)}
+					/>
 					{/* Repair priority ranking */}
 					<RepairPriorityPanel
 						show={showPriority}
