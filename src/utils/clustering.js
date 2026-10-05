@@ -22,23 +22,29 @@ const SEVERITY_RANK = { high: 3, moderate: 2, low: 1 };
  * @param {Array<Object>} reports report objects with `coord: [lng, lat]`
  * @param {Object} [opts]
  * @param {number} [opts.thresholdMeters] max distance from cluster centroid
+ * @param {string|null} [opts.groupBy] report field that must match for two
+ *   reports to cluster (e.g. "type" so a pothole never merges with a
+ *   fallen tree). Legacy missing values group as "pothole".
  * @returns {Array<{id:string, coord:number[], reports:Array, count:number, severity:string}>}
  */
-export function clusterReports(reports, { thresholdMeters = DEFAULT_CLUSTER_THRESHOLD_METERS } = {}) {
+export function clusterReports(reports, { thresholdMeters = DEFAULT_CLUSTER_THRESHOLD_METERS, groupBy = null } = {}) {
   const clusters = [];
   if (!Array.isArray(reports)) return clusters;
+  const keyOf = (r) => (groupBy ? String(r?.[groupBy] ?? "pothole") : "");
 
   for (const rep of reports) {
     if (!isValidCoord(rep?.coord)) continue;
+    const key = keyOf(rep);
     let target = null;
     for (const c of clusters) {
-      if (distMeters(c.coord, rep.coord) <= thresholdMeters) {
+      if (c.key === key && distMeters(c.coord, rep.coord) <= thresholdMeters) {
         target = c;
         break;
       }
     }
     if (!target) {
       target = {
+        key,
         id: `cluster-${rep.id}`,
         coord: [Number(rep.coord[0]), Number(rep.coord[1])],
         reports: [],
@@ -62,6 +68,7 @@ export function clusterReports(reports, { thresholdMeters = DEFAULT_CLUSTER_THRE
     );
     delete c.sumLng;
     delete c.sumLat;
+    delete c.key;
   }
   return clusters;
 }

@@ -127,6 +127,28 @@ export function calculateWeatherRisk(weatherPoints) {
 
 const SEVERITY_RISK = { low: 25, medium: 50, high: 75, critical: 95 };
 
+/**
+ * Road-condition risk from non-pothole condition reports near a route
+ * (broken road, waterlogging, debris, closures, construction, …).
+ * Same evidence convention as pothole risk: zero reports = zero known risk.
+ *
+ * @param {Object} input
+ * @param {number} [input.count] condition reports near the route
+ * @param {number} [input.highSeverityCount] high-severity condition reports
+ * @param {number|null} [input.distanceMeters] route length for density
+ * @returns {number} 0..100 risk
+ */
+export function calculateRoadConditionRisk({ count = 0, highSeverityCount = 0, distanceMeters = null } = {}) {
+  const total = Math.max(0, count || 0);
+  const high = Math.max(0, Math.min(highSeverityCount || 0, total));
+  if (total === 0) return 0;
+  const distanceKm = Number.isFinite(distanceMeters) && distanceMeters > 0 ? distanceMeters / 1000 : null;
+  const perKm = distanceKm ? total / distanceKm : total;
+  const densityRisk = perKm * 26;
+  const severityRisk = high * 10 + (total - high) * 4;
+  return round(densityRisk + severityRisk);
+}
+
 const normalizeIncidents = (incidents) =>
   (Array.isArray(incidents) ? incidents : []).filter((i) => i && typeof i === "object");
 

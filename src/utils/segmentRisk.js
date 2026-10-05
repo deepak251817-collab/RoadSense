@@ -14,10 +14,12 @@ import {
   calculateRoadSafetyScore,
   calculateTrafficRisk,
   calculatePotholeRisk,
+  calculateRoadConditionRisk,
   calculateWeatherRisk,
   calculateIncidentRisk,
   calculateTimeRisk,
 } from "./safetyScore";
+import { isPotholeType } from "./hazardTypes";
 import {
   pointLineDistMeters,
   distMeters,
@@ -139,7 +141,10 @@ export function analyzeSegment(segment, ctx = {}) {
     if (isFinite(d) && d <= SEGMENT_CONFIG.reportThresholdMeters) nearReports.push(rep);
   }
   const activeReports = nearReports.filter((r) => r.status !== "fixed");
-  const highCount = activeReports.filter((r) => r.severity === "high").length;
+  const activePotholes = activeReports.filter((r) => isPotholeType(r.type));
+  const activeConditions = activeReports.filter((r) => !isPotholeType(r.type));
+  const highCount = activePotholes.filter((r) => r.severity === "high").length;
+  const conditionHighCount = activeConditions.filter((r) => r.severity === "high").length;
 
   // --- Incidents near this segment (coord-tagged sources only) ----------
   const incidentsAvailable = Array.isArray(incidents);
@@ -194,7 +199,7 @@ export function analyzeSegment(segment, ctx = {}) {
     traffic: traffic.available ? { risk: traffic.risk, estimated: traffic.estimated } : null,
     weather: weatherRisk,
     potholes: calculatePotholeRisk({
-      count: activeReports.length,
+      count: activePotholes.length,
       highSeverityCount: highCount,
       distanceMeters: lengthMeters,
     }),
@@ -202,7 +207,11 @@ export function analyzeSegment(segment, ctx = {}) {
       ? calculateIncidentRisk(nearIncidents, { available: true })
       : null,
     accidents: null, // segment-level accident split not available from sources
-    roadCondition: null, // road-condition typing arrives with expanded reporting
+    roadCondition: calculateRoadConditionRisk({
+      count: activeConditions.length,
+      highSeverityCount: conditionHighCount,
+      distanceMeters: lengthMeters,
+    }),
     timeRisk,
   });
 
@@ -211,7 +220,7 @@ export function analyzeSegment(segment, ctx = {}) {
   // --- Human-readable explanation ---------------------------------------
   const explanation = [];
   if (activeReports.length) {
-    explanation.push(`${activeReports.length} active hazard report${activeReports.length > 1 ? "s" : ""} within ${SEGMENT_CONFIG.reportThresholdMeters} m${highCount ? ` (${highCount} high severity)` : ""}`);
+    explanation.push(`${activeReports.length} active hazard report${activeReports.length > 1 ? "s" : ""} within ${SEGMENT_CONFIG.reportThresholdMeters} m (${activePotholes.length} pothole, ${activeConditions.length} condition${highCount || conditionHighCount ? `, ${highCount + conditionHighCount} high severity` : ""})`);
   }
   if (incidentsAvailable && nearIncidents.length) {
     explanation.push(`${nearIncidents.length} incident${nearIncidents.length > 1 ? "s" : ""} near this segment`);

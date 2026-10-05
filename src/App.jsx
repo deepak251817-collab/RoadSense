@@ -13,6 +13,7 @@ import {
 } from "./services/potholeDetection";
 import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence, locationConfidence } from "./utils/confidence";
+import { HAZARD_TYPES, DEFAULT_HAZARD_TYPE, hazardTypeMeta } from "./utils/hazardTypes";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
@@ -122,7 +123,7 @@ export default function App() {
 	const [potholesByRoute, setPotholesByRoute] = useState({}); // { [routeId]: { loading, error, items: [{ id, coord: [lng,lat], tags }], updatedAt } }
 	// User-reported potholes (persistent in localStorage)
 	const [userReports, setUserReports] = useState([]); // [{id, coord, severity, description, photoDataUrl, routeIdx, createdAt, status, reviewedAt}]
-	const [reportForm, setReportForm] = useState({ coord: null, coordSource: null, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
+	const [reportForm, setReportForm] = useState({ coord: null, coordSource: null, type: DEFAULT_HAZARD_TYPE, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
 	const [routeWeather, setRouteWeather] = useState({}); // { [routeId]: { loading, error, points: [ { label, coord, data } ] } }
 	const [ocrMessage, setOcrMessage] = useState(""); // status for overlay OCR fallback
 	const [ocrBusy, setOcrBusy] = useState(false);
@@ -1580,6 +1581,7 @@ export default function App() {
 					fixRequestedAt: r.fixRequestedAt || null,
 					reportedToBBMP: Boolean(r.reportedToBBMP) || false,
 					coordSource: r.coordSource || null,
+					type: r.type || DEFAULT_HAZARD_TYPE, // backfill legacy pothole-only reports
 					detection: r.detection || null,
 				}));
 				setUserReports(normalized);
@@ -1944,7 +1946,7 @@ export default function App() {
 		if (adminMode && showOnlyUnverified && normalizeStatus(rep.status) !== 'reported') return false;
 		return true;
 	});
-	const reportClusters = clusterReports(visibleReports, { thresholdMeters: CLUSTER_THRESHOLD_METERS });
+	const reportClusters = clusterReports(visibleReports, { thresholdMeters: CLUSTER_THRESHOLD_METERS, groupBy: "type" });
 	for (const cluster of reportClusters) {
 		// Representative report = most recent in the cluster; every member stays intact
 		const rep = cluster.reports.reduce(
@@ -1960,7 +1962,7 @@ export default function App() {
 			el.style.justifyContent = "center";
 			el.style.cursor = "pointer";
 			el.style.transform = "translateY(-6px)";
-			el.title = `${rep.severity} pothole: ${rep.description}`;
+			el.title = `${rep.severity} ${hazardTypeMeta(rep.type).label}: ${rep.description}`;
 			const img = document.createElement("img");
 			img.src = cluster.severity === "high" ? highIcon : cluster.severity === "moderate" ? moderateIcon : lowIcon;
 			img.alt = `${cluster.severity} pothole${cluster.count > 1 ? ` (${cluster.count} reports)` : ""}`;
@@ -2005,8 +2007,8 @@ export default function App() {
 				const meta = document.createElement("div");
 				meta.style.marginTop = "6px";
 				const displayedTs = rep.captureAt || rep.createdAt;
-				const createdAt = new Date(displayedTs).toLocaleString();
-				const sev = String(rep.severity || "").toUpperCase();
+				const createdAt = new Date(displayedTs).toLocaleString();					const sev = String(rep.severity || "").toUpperCase();
+					const typeLabel = hazardTypeMeta(rep.type).label;
 				const lng = Array.isArray(rep.coord) ? Number(rep.coord[0]) : NaN;
 				const lat = Array.isArray(rep.coord) ? Number(rep.coord[1]) : NaN;
 				const coordLine = (isFinite(lat) && isFinite(lng)) ? `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}` : "";
@@ -2015,9 +2017,8 @@ export default function App() {
 							const sty = STATUS_STYLES[st] || STATUS_STYLES.reported;
 							const baseStyle = 'display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.5px;margin-top:4px;';
 							return `<span style="${baseStyle}background:${sty.bg};color:${sty.text};">${(STATUS_LABELS[st] || 'Reported').toUpperCase()}</span>`;
-						})();
-				meta.innerHTML = `
-					<div><strong>${sev}</strong> • ${createdAt}</div>
+						})();					meta.innerHTML = `
+						<div><strong>${typeLabel} · ${sev}</strong> • ${createdAt}</div>
 					${statusBadge}
 					<div style="margin-top:4px;font-size:10px;font-weight:600;color:#374151;">System confidence: ${repConfidence.level} (${repConfidence.score}/100)</div>
 					${rep.reportedToBBMP ? '<div style="margin-top:4px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#312e81;color:#c7d2fe;">Reported to BBMP</div>' : ''}
@@ -2045,7 +2046,7 @@ export default function App() {
 					const clusterConfidence = assessReportConfidence(cluster.reports);
 					const clusterInfo = document.createElement('div');
 					clusterInfo.style.cssText = 'margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#fff7ed;border:1px solid #fed7aa;';
-					clusterInfo.innerHTML = `<div style="font-weight:700;font-size:12px;color:#9a3412;">POTHOLE CLUSTER</div><div style="font-size:11px;color:#7c2d12;">${cluster.count} reports · Severity: ${String(cluster.severity).toUpperCase()}</div><div style="font-size:11px;color:#7c2d12;margin-top:2px;">System confidence: ${clusterConfidence.level} (${clusterConfidence.score}/100)</div>`;
+					clusterInfo.innerHTML = `<div style="font-weight:700;font-size:12px;color:#9a3412;">${hazardTypeMeta(cluster.reports[0]?.type).label.toUpperCase()} CLUSTER</div><div style="font-size:11px;color:#7c2d12;">${cluster.count} reports · Severity: ${String(cluster.severity).toUpperCase()}</div><div style="font-size:11px;color:#7c2d12;margin-top:2px;">System confidence: ${clusterConfidence.level} (${clusterConfidence.score}/100)</div>`;
 					wrap.appendChild(clusterInfo);
 				}
 				wrap.appendChild(meta);
@@ -2411,6 +2412,7 @@ export default function App() {
 			routeIdx: selectedRouteId,
 			createdAt: Date.now(),
 			status: "reported", // lifecycle: reported → under review → verified → repair requested → fixed (or rejected)
+			type: reportForm.type || DEFAULT_HAZARD_TYPE, // hazard type (pothole, waterlogging, debris, …)
 			coordSource: reportForm.coordSource || null, // gps | exif | ocr | map-pick (feeds system confidence)
 			detection: reportForm.detection || null, // assistive model result (null unless a real detector is registered)
 			reviewedAt: null,
@@ -2429,7 +2431,7 @@ export default function App() {
 			return arr;
 		});
 		// reset form
-		setReportForm({ coord: null, coordSource: null, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
+		setReportForm({ coord: null, coordSource: null, type: DEFAULT_HAZARD_TYPE, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
 		// no map picking to disable
 	};
 
@@ -3588,9 +3590,23 @@ export default function App() {
 					)}
 					{/* User pothole reporting card */}
 					<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a Pothole</h2>
-						<p className="text-xs text-gray-600 dark:text-gray-300 mb-4">Help improve road data by adding local pothole observations. Your reports are stored locally in this browser (no server upload).</p>
+						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h2>
+						<p className="text-xs text-gray-600 dark:text-gray-300 mb-4">Report potholes, broken roads, waterlogging, debris, closures and other road-safety conditions. Your reports are stored locally in this browser (no server upload).</p>
 						<div className="space-y-4">
+							{/* Hazard type selector */}
+							<div>
+								<label htmlFor="hazard-type-select" className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Hazard type</label>
+								<select
+									id="hazard-type-select"
+									value={reportForm.type || DEFAULT_HAZARD_TYPE}
+									onChange={(e) => setReportForm((f) => ({ ...f, type: e.target.value }))}
+									className="mt-1 w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+								>
+									{HAZARD_TYPES.map((t) => (
+										<option key={t.value} value={t.value}>{t.label}</option>
+									))}
+								</select>
+							</div>
 							{/* Severity selector */}
 							<div>
 								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Severity Level</label>
