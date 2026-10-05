@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3 } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -15,7 +15,8 @@ import { clusterReports } from "./utils/clustering";
 import { assessReportConfidence } from "./utils/confidence";
 import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots } from "./utils/hotspots";
-import { hourlyTimeRiskProfile, getSafestWindow } from "./utils/safetyScore";
+import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
+import { predictRoadRiskAllHorizons } from "./utils/prediction";
 import {
   tripSummary,
 } from "./utils/tripHistory";
@@ -36,6 +37,7 @@ import HazardAlertStack from "./components/HazardAlertStack";
 import HotspotsPanel from "./components/HotspotsPanel";
 import TripsPanel from "./components/TripsPanel";
 import AnalyticsPanel from "./components/AnalyticsPanel";
+import PredictiveSafetyPanel from "./components/PredictiveSafetyPanel";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -960,6 +962,45 @@ export default function App() {
 		() => computeSafetyAnalytics({ reports: userReports, trips: tripHistory }),
 		[userReports, tripHistory]
 	);
+
+	// ---- Predictive safety (rule-based estimate; see utils/prediction) ----
+	const [showPredictive, setShowPredictive] = useState(false);
+	// Real OpenWeather forecast entries for the destination (null when unavailable)
+	const [routeForecast, setRouteForecast] = useState(null);
+	useEffect(() => {
+		let cancelled = false;
+		const key = import.meta.env.VITE_OPENWEATHER_KEY;
+		if (!key || !destCoord) { setRouteForecast(null); return undefined; }
+		const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${destCoord[1]}&lon=${destCoord[0]}&appid=${key}&units=metric`;
+		fetchJsonCached(url, { timeoutMs: 8000, ttlMs: 600000 })
+			.then((data) => { if (!cancelled) setRouteForecast(Array.isArray(data?.list) && data.list.length ? data.list : null); })
+			.catch(() => { if (!cancelled) setRouteForecast(null); });
+		return () => { cancelled = true; };
+	}, [destCoord]);
+	const predictive = useMemo(() => {
+		if (!routes?.length) return null;
+		const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+		const a = routeAnalyses[idx];
+		if (!a) return null;
+		const current = calculateRoadSafetyScore({
+			traffic: a.factorRisks.traffic ?? null,
+			weather: a.factorRisks.weather ?? null,
+			potholes: a.factorRisks.pothole ?? null,
+			incidents: a.factorRisks.incident ?? null,
+			accidents: a.factorRisks.accident ?? null,
+			roadCondition: a.factorRisks.roadCondition ?? null,
+			timeRisk: a.factorRisks.time ?? null,
+		});
+		// Real forecast entry closest to "now" (3-hour OpenWeather steps)
+		let forecast = null;
+		if (Array.isArray(routeForecast) && routeForecast.length) {
+			const nowMs = Date.now();
+			forecast = routeForecast.reduce((best, e) =>
+				Math.abs((e.dt || 0) * 1000 - nowMs) < Math.abs((best.dt || 0) * 1000 - nowMs) ? e : best
+			);
+		}
+		return { current, horizons: predictRoadRiskAllHorizons({ currentConditions: current, forecast }) };
+	}, [routes, routeAnalyses, selectedRouteId, routeForecast]);
 
 	// Admin worklist stats: attention counters + per-status counts
 	const adminQueue = useMemo(() => ({
@@ -2830,6 +2871,16 @@ export default function App() {
 						<BarChart3 className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Analytics</span>
 					</button>
+					<button
+						onClick={() => setShowPredictive((v) => !v)}
+						aria-expanded={showPredictive}
+						disabled={!routes?.length}
+						title={routes?.length ? 'Show predictive safety estimates for the selected route' : 'Find routes first to see predictive safety'}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showPredictive ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<TrendingUp className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Predict</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -2886,6 +2937,8 @@ export default function App() {
 					/>
 					{/* Safety analytics */}
 					<AnalyticsPanel show={showAnalytics} analytics={safetyAnalytics} onClose={() => setShowAnalytics(false)} />
+					{/* Predictive safety (rule-based estimate) */}
+					<PredictiveSafetyPanel show={showPredictive} prediction={predictive} onClose={() => setShowPredictive(false)} />
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
