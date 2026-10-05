@@ -41,6 +41,8 @@ import TripsPanel from "./components/TripsPanel";
 import AnalyticsPanel from "./components/AnalyticsPanel";
 import PredictiveSafetyPanel from "./components/PredictiveSafetyPanel";
 import SegmentRiskStrip from "./components/SegmentRiskStrip";
+import WaterloggingPanel from "./components/WaterloggingPanel";
+import { assessWaterloggingRisk } from "./utils/waterlogging";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1015,6 +1017,36 @@ export default function App() {
 
 	// ---- Segment-level risk analysis for the selected route ----
 	const [showSegments, setShowSegments] = useState(false);
+
+	// ---- Waterlogging / flood risk (rule-based estimate; utils/waterlogging)
+	const [showWaterlogging, setShowWaterlogging] = useState(false);
+	const waterlogging = useMemo(() => {
+		if (!routes?.length) return null;
+		const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+		const route = routes[idx];
+		if (!route) return null;
+		// Forecast entry with the most expected rain within the next ~6 hours
+		// (two OpenWeather 3-hour steps); falls back to the entry nearest "now".
+		let forecast = null;
+		if (Array.isArray(routeForecast) && routeForecast.length) {
+			const nowSec = Date.now() / 1000;
+			const soon = routeForecast.filter((e) => (e.dt || 0) >= nowSec && (e.dt || 0) <= nowSec + 6 * 3600);
+			const pool = soon.length ? soon : routeForecast;
+			forecast = pool.reduce((best, e) => {
+				const rainOf = (x) => Number(x?.rain?.["3h"]) || 0;
+				if (rainOf(e) !== rainOf(best)) return rainOf(e) > rainOf(best) ? e : best;
+				return Math.abs((e.dt || 0) - nowSec) < Math.abs((best.dt || 0) - nowSec) ? e : best;
+			});
+		}
+		return assessWaterloggingRisk({
+			route,
+			reports: userReports,
+			weatherPoints: routeWeather?.[idx]?.points || [],
+			forecast,
+			showFixed,
+			adminMode,
+		});
+	}, [routes, selectedRouteId, routeForecast, userReports, routeWeather, showFixed, adminMode]);
 	const routeSegments = useMemo(() => {
 		if (!routes?.length || selectedRouteId == null) return [];
 		const idx = Number(selectedRouteId);
@@ -3018,6 +3050,16 @@ export default function App() {
 						<Gauge className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Segments</span>
 					</button>
+					<button
+						onClick={() => setShowWaterlogging((v) => !v)}
+						aria-expanded={showWaterlogging}
+						disabled={!routes?.length}
+						title={routes?.length ? 'Show waterlogging/flood risk estimate for the selected route' : 'Find routes first to see waterlogging risk'}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showWaterlogging ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<CloudRain className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Flood</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3078,6 +3120,16 @@ export default function App() {
 					<PredictiveSafetyPanel show={showPredictive} prediction={predictive} onClose={() => setShowPredictive(false)} />
 					{/* Segment-level road risk (per-segment score, hazards, weather) */}
 					<SegmentRiskStrip show={showSegments} segments={routeSegments} onClose={() => setShowSegments(false)} />
+					{/* Waterlogging / flood risk (rule-based estimate) */}
+					<WaterloggingPanel
+						show={showWaterlogging}
+						assessment={waterlogging}
+						onClose={() => setShowWaterlogging(false)}
+						onEnableWeather={() => {
+							const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+							if (!routeWeather[idx]) fetchWeatherForRoute(idx);
+						}}
+					/>
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
