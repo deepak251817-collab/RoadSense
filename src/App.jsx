@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -55,6 +55,8 @@ import {
   loadChangeSnapshots,
   saveChangeSnapshots,
 } from "./utils/changeDetection";
+import RepairPriorityPanel from "./components/RepairPriorityPanel";
+import { rankRepairs } from "./utils/repairPriority";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -1066,6 +1068,10 @@ export default function App() {
 		() => detectChanges({ snapshots: changeSnapshots, reports: userReports }),
 		[changeSnapshots, userReports]
 	);
+
+	// ---- Repair priority ranking (utils/repairPriority) ----
+	const [showPriority, setShowPriority] = useState(false);
+	const rankedRepairs = useMemo(() => rankRepairs(userReports), [userReports]);
 
 	// ---- Segment-level risk analysis for the selected route ----
 	const [showSegments, setShowSegments] = useState(false);
@@ -3142,6 +3148,15 @@ export default function App() {
 						<GitCompareArrows className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Changes</span>
 					</button>
+					<button
+						onClick={() => setShowPriority((v) => !v)}
+						aria-expanded={showPriority}
+						title="Show active hazards ranked by repair urgency"
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showPriority ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<Wrench className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Priority</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3218,6 +3233,16 @@ export default function App() {
 					<RoadHealthPanel show={showRoadHealth} health={roadHealth} onClose={() => setShowRoadHealth(false)} />
 					{/* Change detection vs stored baseline */}
 					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
+					{/* Repair priority ranking */}
+					<RepairPriorityPanel
+						show={showPriority}
+						ranked={rankedRepairs}
+						onClose={() => setShowPriority(false)}
+						onFocus={(report) => {
+							const map = window._mapInstance;
+							if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
+						}}
+					/>
 					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
