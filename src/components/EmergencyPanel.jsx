@@ -9,6 +9,12 @@ import {
   emergencyShareText,
   openLocationLink,
 } from "../utils/emergencyMode";
+import {
+  EMERGENCY_SERVICES_LABEL,
+  EMERGENCY_SERVICES_DISCLAIMER,
+  SERVICES_RADIUS_METERS,
+  fetchEmergencyServices,
+} from "../utils/emergencyServices";
 
 const SEVERITY_TEXT = {
   critical: "text-red-700 dark:text-red-300",
@@ -34,6 +40,8 @@ const SEVERITY_TEXT = {
 export default function EmergencyPanel({ show, context, onClose }) {
   const [copied, setCopied] = useState(null); // "coords" | "summary" | "failed"
   const copyTimerRef = useRef(null);
+  // Nearby emergency services (live OpenStreetMap Overpass fetch, on demand)
+  const [services, setServices] = useState(null); // null | {loading:true} | {ok, services, error, fetchedAt, cached}
 
   useEffect(() => () => clearTimeout(copyTimerRef.current), []);
 
@@ -43,6 +51,19 @@ export default function EmergencyPanel({ show, context, onClose }) {
   const coord = location.coord;
   const osmLink = openLocationLink(coord);
   const checklist = emergencyChecklist(context);
+
+  const searchServices = async () => {
+    if (!locationKnown) return;
+    setServices({ loading: true });
+    const res = await fetchEmergencyServices(coord);
+    setServices({
+      ok: res.ok,
+      services: res.services,
+      error: res.error || null,
+      cached: Boolean(res.cached),
+      fetchedAt: res.fetchedAt,
+    });
+  };
 
   const copyText = async (key, text) => {
     clearTimeout(copyTimerRef.current);
@@ -194,6 +215,65 @@ export default function EmergencyPanel({ show, context, onClose }) {
           ))}
         </ul>
       )}
+
+      {/* Nearby emergency services (live OpenStreetMap fetch, on demand) */}
+      <div className="mt-3">
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-[11px] font-semibold text-red-800 dark:text-red-200">
+            Nearby emergency services (within {Math.round(SERVICES_RADIUS_METERS / 1000)} km)
+          </div>
+          <button
+            onClick={searchServices}
+            disabled={!locationKnown || Boolean(services?.loading)}
+            className="rounded-lg border border-red-400 px-2 py-1 text-[11px] text-red-700 dark:text-red-300 hover:bg-red-600 hover:text-white hover:border-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {services?.loading ? "Searching…" : services && !services.loading ? "Refresh" : "Search nearby"}
+          </button>
+        </div>
+        <div className="mb-1 inline-flex items-center gap-2">
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-700 text-white">
+            {EMERGENCY_SERVICES_LABEL}
+          </span>
+          <span className="text-[10px] text-red-700 dark:text-red-300">{EMERGENCY_SERVICES_DISCLAIMER}</span>
+        </div>
+        {!locationKnown && (
+          <div className="text-[10px] text-gray-600 dark:text-gray-300">
+            Needs a known position — nothing is searched or guessed until you have one.
+          </div>
+        )}
+        {services && !services.loading && !services.ok && (
+          <div className="rounded-lg border border-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 text-[11px] text-amber-800 dark:text-amber-200" role="status">
+            {services.error} This is a fetch failure — it does not mean no services exist nearby.
+          </div>
+        )}
+        {services && !services.loading && services.ok && services.services.length === 0 && (
+          <div className="text-[10px] text-gray-600 dark:text-gray-300" role="status">
+            No matching services found in OpenStreetMap within {Math.round(SERVICES_RADIUS_METERS / 1000)} km — that
+            reflects map coverage, not a real-world absence. Call 112 anyway.
+          </div>
+        )}
+        {services && !services.loading && services.ok && services.services.length > 0 && (
+          <ul className="space-y-1">
+            {services.services.map((s) => (
+              <li key={s.id} className="text-[11px] text-gray-800 dark:text-gray-200 flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-red-600 dark:text-red-400">
+                  {s.distanceMeters >= 1000 ? `${(s.distanceMeters / 1000).toFixed(1)} km` : `${s.distanceMeters} m`}
+                </span>
+                <span className="font-semibold">{s.name}</span>
+                <span className="px-1 rounded bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-200 text-[9px] uppercase font-bold">
+                  {s.category}
+                </span>
+                {s.openingHours && <span className="text-gray-500 dark:text-gray-400 text-[10px]">{s.openingHours}</span>}
+                {s.phone && (
+                  <a href={`tel:${s.phone}`} className="text-red-700 dark:text-red-300 underline font-semibold">
+                    {s.phone}
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
