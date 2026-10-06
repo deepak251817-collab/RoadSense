@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   LineChart,
   Line,
@@ -9,6 +9,8 @@ import {
   CartesianGrid,
 } from "recharts";
 import { PREDICTION_LABEL } from "../utils/prediction";
+import { describeEngine, explainPrediction, explainSafetyScore } from "../utils/explainability";
+import ExplanationCard from "./ExplanationCard";
 
 /**
  * Predictive safety panel: current + 15/30/60-minute road-risk estimates.
@@ -24,6 +26,9 @@ import { PREDICTION_LABEL } from "../utils/prediction";
  * @param {Function} props.onClose hide the panel
  */
 export default function PredictiveSafetyPanel({ show, prediction, onClose }) {
+  // Hook must run unconditionally — keep it above the early return.
+  const [showExplanation, setShowExplanation] = useState(false);
+
   if (!show || !prediction) return null;
   const { current, horizons } = prediction;
 
@@ -79,7 +84,8 @@ export default function PredictiveSafetyPanel({ show, prediction, onClose }) {
       </div>
       <div className="mb-3 text-[11px] text-violet-700 dark:text-violet-300">
         {PREDICTION_LABEL} — rule-based estimate from current conditions, time of day and any
-        available forecast. Not a real-time observation or guaranteed outcome.
+        available forecast. Not a real-time observation or guaranteed outcome.{" "}
+        <span className="font-semibold">Engine: {describeEngine()}.</span>
       </div>
 
       {/* Horizon cards */}
@@ -161,6 +167,33 @@ export default function PredictiveSafetyPanel({ show, prediction, onClose }) {
             </li>
           ))}
         </ul>
+      </div>
+
+      {/* Explainable decision layer — full factor breakdown on demand */}
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setShowExplanation((v) => !v)}
+          aria-expanded={showExplanation}
+          className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 underline"
+        >
+          {showExplanation ? "Hide decision breakdown" : "How was this decided?"}
+        </button>
+        {showExplanation && (
+          <>
+            <ExplanationCard
+              explanation={explainSafetyScore(current)}
+              heading="Current safety score — why"
+              className="mt-2"
+            />
+            <ExplanationCard
+              explanation={explainPrediction(last)}
+              heading={`${last.horizonMinutes}-minute estimate — why`}
+              showValue={false}
+              className="mt-2"
+            />
+          </>
+        )}
       </div>
     </div>
   );

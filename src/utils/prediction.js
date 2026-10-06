@@ -169,6 +169,11 @@ export function predictRoadRisk({
       risk: f.risk,
       available: f.available,
       changed: f.available && currentTimeRisk != null && key === "time" && f.risk !== currentTimeRisk,
+      // Engine-computed numbers are passed through untouched so the
+      // explainability layer can show real weights/shares instead of
+      // inventing feature-importance values.
+      weight: f.weight,
+      contribution: f.contribution,
     };
   }
 
