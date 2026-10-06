@@ -36,12 +36,19 @@ export const OVERPASS_ENDPOINT =
 	(typeof import.meta !== "undefined" && import.meta.env?.VITE_OVERPASS_URL) ||
 	"https://overpass-api.de/api/interpreter";
 
+/**
+ * Fallback Overpass mirrors, tried in order when the primary endpoint
+ * fails (the public instance regularly returns 504s under load).
+ */
+export const OVERPASS_MIRRORS = ["https://overpass.kumi.systems/api/interpreter"];
+
 /** amenity tag → display category. Only genuine emergency-relevant types. */
 export const SERVICE_CATEGORY_BY_AMENITY = {
 	hospital: "Hospital",
 	clinic: "Clinic",
 	police: "Police station",
 	fire_station: "Fire station",
+	fuel: "Fuel station",
 };
 
 /** Fallback name when OSM has no name tag. */
@@ -144,24 +151,28 @@ export async function fetchEmergencyServices(coord, { radiusMeters = SERVICES_RA
 	if (!isValidCoord(coord)) {
 		return { ok: false, services: [], fetchedAt, error: "No position available to search around." };
 	}
-	const url = buildOverpassUrl(coord, radiusMeters);
-	try {
-		const { data, cached } = await fetchJsonCached(url, {
-			ttlMs: SERVICES_CACHE_TTL_MS,
-			cacheKey: `overpass:${coord[0].toFixed(3)},${coord[1].toFixed(3)},${radiusMeters}`,
-			timeoutMs: 25000,
-			retries: 1,
-			signal,
-		});
-		const services = parseOverpassServices(data, coord, { range: radiusMeters });
-		return { ok: true, services, fetchedAt, cached };
-	} catch (err) {
-		const error =
-			err?.name === "HttpError" && String(err.message).startsWith("Timeout")
-				? "The OpenStreetMap service timed out."
-				: "Could not reach the OpenStreetMap service. Try again shortly.";
-		return { ok: false, services: [], fetchedAt, error };
+	const endpoints = [OVERPASS_ENDPOINT, ...OVERPASS_MIRRORS];
+	let lastError = null;
+	for (const endpoint of endpoints) {
+		try {
+			const { data, cached } = await fetchJsonCached(buildOverpassUrl(coord, radiusMeters, endpoint), {
+				ttlMs: SERVICES_CACHE_TTL_MS,
+				cacheKey: `overpass:${endpoint}:${coord[0].toFixed(3)},${coord[1].toFixed(3)},${radiusMeters}`,
+				timeoutMs: 25000,
+				retries: 1,
+				signal,
+			});
+			const services = parseOverpassServices(data, coord, { range: radiusMeters });
+			return { ok: true, services, fetchedAt, cached };
+		} catch (err) {
+			lastError = err;
+		}
 	}
+	const error =
+		lastError?.name === "HttpError" && String(lastError.message).startsWith("Timeout")
+			? "The OpenStreetMap service timed out."
+			: "Could not reach the OpenStreetMap service. Try again shortly.";
+	return { ok: false, services: [], fetchedAt, error };
 }
 
 /** Clear cached Overpass responses (used by tests / force refresh). */

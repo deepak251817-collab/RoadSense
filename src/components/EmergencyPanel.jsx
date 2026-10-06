@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Siren, Phone, Copy, MapPin, ExternalLink } from "lucide-react";
+import { Siren, Phone, Copy, MapPin, ExternalLink, Navigation } from "lucide-react";
 import {
   EMERGENCY_LABEL,
   EMERGENCY_DISCLAIMER,
@@ -36,8 +36,10 @@ const SEVERITY_TEXT = {
  * @param {boolean} props.show panel visibility
  * @param {Object} props.context output of buildEmergencyContext()
  * @param {Function} props.onClose hide the panel
+ * @param {Function} [props.onServicesFound] hand fetched services to the app (map display)
+ * @param {Function} [props.onNavigateTo] set a service as the navigation destination
  */
-export default function EmergencyPanel({ show, context, onClose }) {
+export default function EmergencyPanel({ show, context, onClose, onServicesFound, onNavigateTo }) {
   const [copied, setCopied] = useState(null); // "coords" | "summary" | "failed"
   const copyTimerRef = useRef(null);
   // Nearby emergency services (live OpenStreetMap Overpass fetch, on demand)
@@ -63,6 +65,8 @@ export default function EmergencyPanel({ show, context, onClose }) {
       cached: Boolean(res.cached),
       fetchedAt: res.fetchedAt,
     });
+    // Hand results (or an empty list on failure) to the app for map display
+    onServicesFound?.(res.ok ? res.services : []);
   };
 
   const copyText = async (key, text) => {
@@ -268,6 +272,15 @@ export default function EmergencyPanel({ show, context, onClose }) {
                   <a href={`tel:${s.phone}`} className="text-red-700 dark:text-red-300 underline font-semibold">
                     {s.phone}
                   </a>
+                )}
+                {onNavigateTo && (
+                  <button
+                    onClick={() => onNavigateTo(s.coord, s.name)}
+                    className="inline-flex items-center gap-1 rounded border border-red-400 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:text-red-300 hover:bg-red-600 hover:text-white hover:border-red-600"
+                    title={`Plan a route to ${s.name}`}
+                  >
+                    <Navigation className="w-3 h-3" aria-hidden="true" /> Directions
+                  </button>
                 )}
               </li>
             ))}

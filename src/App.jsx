@@ -1001,6 +1001,66 @@ export default function App() {
 		[userCoord, sourceCoord, destCoord, userReports, routeIncidentResults, selectedRouteId, routeWeather, routes]
 	);
 
+	// ---- Emergency services: map display + directions-to-service ----
+	const [serviceMapItems, setServiceMapItems] = useState([]); // services plotted on the map
+	const serviceMarkersRef = useRef([]);
+	const serviceNavPendingRef = useRef(false);
+	const escapePopupHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+	const handleServiceNavigate = (coord, name) => {
+		if (!Array.isArray(coord) || coord.length !== 2) return;
+		setDestCoord(coord);
+		setDestQuery(name || "Selected service");
+		setDestSuggestions([]);
+		setDestLocked(true);
+		const map = window._mapInstance;
+		if (map) map.flyTo({ center: coord, zoom: 14 });
+		if (sourceCoord) serviceNavPendingRef.current = true;
+	};
+
+	// Route to the chosen service once React has committed the new destination
+	useEffect(() => {
+		if (serviceNavPendingRef.current && sourceCoord && destCoord) {
+			serviceNavPendingRef.current = false;
+			try { getRoutes(); } catch { /* routing failure must not break the app */ }
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [sourceCoord, destCoord]);
+
+	// Plot fetched emergency services as map markers with detail popups
+	useEffect(() => {
+		const map = window._mapInstance;
+		serviceMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* noop */ } });
+		serviceMarkersRef.current = [];
+		if (!map || !serviceMapItems.length) return undefined;
+		const TINTS = { Hospital: "#dc2626", Clinic: "#ef4444", "Police station": "#2563eb", "Fire station": "#ea580c", "Fuel station": "#16a34a" };
+		for (const s of serviceMapItems) {
+			try {
+				const el = document.createElement("div");
+				el.className = "stars-service-marker";
+				el.title = `${s.name} (${s.category})`;
+				el.style.cssText = `width:18px;height:18px;border-radius:9999px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);background:${TINTS[s.category] || "#dc2626"};display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700;line-height:1;`;
+				el.textContent = s.category === "Fuel station" ? "\u26FD" : s.category.charAt(0);
+				const dist = s.distanceMeters >= 1000 ? `${(s.distanceMeters / 1000).toFixed(1)} km` : `${s.distanceMeters} m`;
+				const popupHtml =
+					`<div style=\"font-size:12px;line-height:1.4\"><strong>${escapePopupHtml(s.name)}</strong><br/>${escapePopupHtml(s.category)} \u00B7 ${escapePopupHtml(dist)}` +
+					(s.openingHours ? `<br/>Hours: ${escapePopupHtml(s.openingHours)}` : "") +
+					(s.phone ? `<br/><a href=\"tel:${escapePopupHtml(s.phone)}\">${escapePopupHtml(s.phone)}</a>` : "") +
+					`<br/><span style=\"color:#6b7280\">OpenStreetMap data</span></div>`;
+				const mk = new mapboxgl.Marker({ element: el, anchor: "center" })
+					.setLngLat(s.coord)
+					.setPopup(new mapboxgl.Popup({ offset: 16, maxWidth: "230px" }).setHTML(popupHtml))
+					.addTo(map);
+				serviceMarkersRef.current.push(mk);
+			} catch { /* one bad marker must not break the map */ }
+		}
+		return () => {
+			serviceMarkersRef.current.forEach((m) => { try { m.remove(); } catch { /* noop */ } });
+			serviceMarkersRef.current = [];
+		};
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [serviceMapItems]);
+
 	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes;
 	// the user's priority preference tunes the recommendation policy.
 	const recommendation = useMemo(
@@ -3349,7 +3409,13 @@ export default function App() {
 					{/* Change detection vs stored baseline */}
 					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
 					{/* Emergency assistance (rule-based checklist) */}
-					<EmergencyPanel show={emergencyMode} context={emergencyContext} onClose={() => setEmergencyMode(false)} />
+					<EmergencyPanel
+						show={emergencyMode}
+						context={emergencyContext}
+						onClose={() => { setEmergencyMode(false); setServiceMapItems([]); }}
+						onServicesFound={setServiceMapItems}
+						onNavigateTo={handleServiceNavigate}
+					/>
 					{/* Route preferences (priority + avoidance) */}
 					<RoutePreferencesPanel
 						show={showRoutePrefs}
