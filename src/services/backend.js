@@ -54,6 +54,7 @@ export const API_ENDPOINTS = Object.freeze({
     get: "GET /hazards/:id",
     create: "POST /hazards",
     update: "PATCH /hazards/:id",
+    replace: "PUT /hazards",
   }),
   [DOMAINS.ROAD_SEGMENTS]: Object.freeze({
     list: "GET /road-segments",
@@ -199,6 +200,11 @@ export function createLocalRepository(storage = null, { kind = REPOSITORY_KINDS.
       write(collection, list);
       return entry;
     },
+    /** Bulk replace (the app's synchronous persistence path). */
+    replace(collection, list) {
+      const arr = (Array.isArray(list) ? list : []).filter((r) => r && typeof r === "object");
+      return write(collection, arr);
+    },
     remove(collection, id) {
       const list = read(collection);
       const next = list.filter((r) => !r || r.id !== id);
@@ -264,6 +270,7 @@ export function createHttpRepository({
     create: (collection, record) => request("POST", collPath(collection), record),
     update: (collection, id, patch, opts) =>
       request("PATCH", `${collPath(collection)}/${encodeURIComponent(id)}`, patch, opts),
+    replace: (collection, list, opts) => request("PUT", collPath(collection), list, opts),
     remove: (collection, id, opts) =>
       request("DELETE", `${collPath(collection)}/${encodeURIComponent(id)}`, undefined, opts),
   };

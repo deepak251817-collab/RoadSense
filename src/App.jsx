@@ -18,6 +18,12 @@ import { buildSafetyHeatmapData } from "./utils/heatmap";
 import { detectHotspots } from "./utils/hotspots";
 import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
 import { predictRoadRiskAllHorizons } from "./utils/prediction";
+import {
+  endAdminSession,
+  loadHazards,
+  replaceHazards,
+  startAdminSession,
+} from "./services/hazardService";
 import { analyzeRouteSegments } from "./utils/segmentRisk";
 import {
   tripSummary,
@@ -1804,11 +1810,10 @@ export default function App() {
 
 	// User-reported pothole utilities
 	useEffect(() => {
-		// Load persisted reports
+		// Load persisted reports through the hazard data service (same local key)
 		try {
-			const raw = localStorage.getItem("userPotholeReports");
-			if (raw) {
-				const parsed = JSON.parse(raw) || [];
+			const parsed = loadHazards();
+			if (parsed.length) {
 				// Backfill missing fields for older entries
 				const normalized = parsed.map((r) => ({
 					...r,
@@ -1860,7 +1865,9 @@ export default function App() {
 	}, [showOnlyUnverified]);
 
 	const persistReports = (arr) => {
-		try { localStorage.setItem("userPotholeReports", JSON.stringify(arr)); } catch { }
+		// Persistence goes through the hazard data service: the same localStorage
+		// key today, the PATCH/PUT API endpoint once a backend is configured.
+		replaceHazards(arr);
 	};
 
 	const persistAdminMessages = (arr) => {
@@ -2813,6 +2820,7 @@ export default function App() {
 								setAdminPinOpen(true);
 							} else {
 								setAdminMode(false);
+								endAdminSession();
 							}
 						}}
 						aria-expanded={adminMode}
@@ -2847,10 +2855,10 @@ export default function App() {
 					<form
 						className="relative z-10 w-full max-w-sm bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200"
 						onSubmit={(e) => {
-							e.preventDefault();
-							if (adminPinValue === '1234') {
-								setAdminMode(true);
-								setAdminPinOpen(false);
+							e.preventDefault();								if (adminPinValue === '1234') {
+									setAdminMode(true);
+									startAdminSession();
+									setAdminPinOpen(false);
 								setAdminPinValue('');
 								setAdminPinError('');
 							} else {
