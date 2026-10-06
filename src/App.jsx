@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -69,6 +69,8 @@ import {
   loadRoutePreferences,
   saveRoutePreferences,
 } from "./utils/routePreferences";
+import EmergencyPanel from "./components/EmergencyPanel";
+import { EMERGENCY_LABEL, buildEmergencyContext } from "./utils/emergencyMode";
 import MapLayersPopover from "./components/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
@@ -974,6 +976,30 @@ export default function App() {
 	useEffect(() => {
 		saveRoutePreferences(routePreferences);
 	}, [routePreferences]);
+
+	// ---- Emergency mode (rule-based checklist; utils/emergencyMode) ----
+	const [emergencyMode, setEmergencyMode] = useState(false);
+	const emergencyContext = useMemo(
+		() =>
+			buildEmergencyContext({
+				userCoord,
+				sourceCoord,
+				destCoord,
+				reports: userReports,
+				incidents:
+					selectedRouteId != null && routeIncidentResults?.length
+						? routeIncidentResults[Number(selectedRouteId)]?.incidents || []
+						: [],
+				weatherMains: (routeWeather?.[selectedRouteId]?.points || [])
+					.map((p) => p?.data?.weather?.[0]?.main)
+					.filter(Boolean),
+				routeCoords:
+					selectedRouteId != null && routes?.[Number(selectedRouteId)]?.geometry?.coordinates
+						? routes[Number(selectedRouteId)].geometry.coordinates
+						: null,
+			}),
+		[userCoord, sourceCoord, destCoord, userReports, routeIncidentResults, selectedRouteId, routeWeather, routes]
+	);
 
 	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes;
 	// the user's priority preference tunes the recommendation policy.
@@ -3237,6 +3263,15 @@ export default function App() {
 						<SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
 						<span className="font-medium">Preferences</span>
 					</button>
+					<button
+						onClick={() => setEmergencyMode((v) => !v)}
+						aria-expanded={emergencyMode}
+						title={`Emergency assistance (${EMERGENCY_LABEL})`}
+						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${emergencyMode ? 'border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+					>
+						<Siren className="w-4 h-4" aria-hidden="true" />
+						<span className="font-medium">Emergency</span>
+					</button>
 					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
 						<span
 							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
@@ -3313,6 +3348,8 @@ export default function App() {
 					<RoadHealthPanel show={showRoadHealth} health={roadHealth} onClose={() => setShowRoadHealth(false)} />
 					{/* Change detection vs stored baseline */}
 					<ChangeDetectionPanel show={showChanges} changes={changes} onClose={() => setShowChanges(false)} />
+					{/* Emergency assistance (rule-based checklist) */}
+					<EmergencyPanel show={emergencyMode} context={emergencyContext} onClose={() => setEmergencyMode(false)} />
 					{/* Route preferences (priority + avoidance) */}
 					<RoutePreferencesPanel
 						show={showRoutePrefs}
