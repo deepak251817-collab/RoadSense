@@ -3394,13 +3394,15 @@ export default function App() {
 								bbmpLoaded={bbmpLoaded}
 							layers={[
 								{ label: 'Road Risk', checked: roadRiskOn, onChange: setRoadRiskOn },
-								{ label: 'Traffic congestion', checked: congestionVisible, onChange: setCongestionVisible },
-								{ label: 'Weather', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
-								{ label: 'Potholes (user)', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
 								{ label: 'Incidents', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
 								{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
 								{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
 								{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
+							]}
+							lower={[
+								{ label: 'Weather forecasts', hint: 'forecast points along the route', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
+								{ label: 'Hazard markers', hint: 'reported hazards on the map', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
+								{ label: 'Live routing', hint: 'live traffic overlay on routes', checked: congestionVisible, onChange: setCongestionVisible },
 							]}
 							/>
 							<button
