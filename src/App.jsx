@@ -1080,6 +1080,9 @@ export default function App() {
 	// Aggregate trip history stats (basis for the trips panel and analytics)
 	// ---- Trip history: record every route actually used (see hooks/useTripHistory) ----
 	// Declared before the memos below that consume tripHistory.
+	// Weather condition known for the selected route (first loaded forecast point)
+	const selectedRouteWeather =
+		routeWeather?.[selectedRouteId]?.points?.[0]?.data?.weather?.[0] ?? null;
 	const { tripHistory, persistTrips } = useTripHistory({
 		routes,
 		selectedRouteId,
@@ -1089,6 +1092,7 @@ export default function App() {
 		sourceQuery,
 		destQuery,
 		userCoord,
+		weatherLabel: selectedRouteWeather?.description || selectedRouteWeather?.main || null,
 	});
 
 	const tripStats = useMemo(() => tripSummary(tripHistory), [tripHistory]);

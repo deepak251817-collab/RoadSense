@@ -32,10 +32,39 @@ export default function TripsPanel({ show, trips = [], stats, onClear, onClose }
         </div>
       </div>
       {stats && stats.tripCount > 0 && (
-        <div className="mb-2 text-xs text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-3 py-2 border border-indigo-200 dark:border-indigo-800">
-          {stats.tripCount} trip{stats.tripCount === 1 ? "" : "s"} · {stats.totalKm} km · avg
-          safety {stats.avgSafety ?? "—"} · arrived {stats.arrivedCount}
-        </div>
+        <>
+          {/* Safety analytics dashboard — every value derived from recorded trips */}
+          <div className="mb-2 grid grid-cols-2 lg:grid-cols-3 gap-1.5 text-[11px]">
+            <Metric label="Trips" value={String(stats.tripCount)} />
+            <Metric
+              label="Average safety"
+              value={stats.avgSafety != null ? String(stats.avgSafety) : "— no scored trips"}
+            />
+            <Metric label="Hazards encountered" value={String(stats.hazardsEncountered ?? 0)} />
+            <Metric
+              wide
+              label="Safest route"
+              value={
+                stats.safestRoute
+                  ? `${stats.safestRoute.safetyScore} · ${stats.safestRoute.label}`
+                  : "— no scored trips"
+              }
+            />
+            <Metric
+              wide
+              label="Most frequent route"
+              value={
+                stats.mostFrequentRoute
+                  ? `${stats.mostFrequentRoute.count}× · ${stats.mostFrequentRoute.label}`
+                  : "— no trips"
+              }
+            />
+          </div>
+          <div className="mb-2 text-[11px] text-indigo-900 dark:text-indigo-200 bg-white/70 dark:bg-gray-900/50 rounded-lg px-3 py-2 border border-indigo-200 dark:border-indigo-800">
+            {stats.totalKm} km driven · arrived {stats.arrivedCount} · weather recorded on{" "}
+            {stats.withWeather ?? 0} trip{(stats.withWeather ?? 0) === 1 ? "" : "s"}
+          </div>
+        </>
       )}
       {trips.length === 0 ? (
         <p className="text-sm text-gray-600 dark:text-gray-300">
@@ -76,6 +105,11 @@ export default function TripsPanel({ show, trips = [], stats, onClear, onClose }
                   <span>· Route {t.routeIndex + 1}</span>
                   {t.distanceMeters != null && <span>· {(t.distanceMeters / 1000).toFixed(1)} km</span>}
                   {t.durationMinutes != null && <span>· {t.durationMinutes} min</span>}
+                  {t.weather && (
+                    <span className="truncate max-w-[8rem]" title="Weather recorded at trip start">
+                      · {t.weather}
+                    </span>
+                  )}
                   {score != null && (
                     <span
                       className="font-bold px-1.5 py-0.5 rounded text-white"
@@ -91,6 +125,23 @@ export default function TripsPanel({ show, trips = [], stats, onClear, onClose }
           })}
         </ul>
       )}
+    </div>
+  );
+}
+
+/** One dashboard metric tile. Label above, value below, truncates cleanly. */
+function Metric({ label, value, wide = false }) {
+  return (
+    <div
+      className={`rounded-lg border border-indigo-200 dark:border-indigo-800 bg-white/70 dark:bg-gray-900/50 px-2 py-1 ${
+        wide ? "col-span-2" : ""
+      }`}
+      title={`${label}: ${value}`}
+    >
+      <div className="text-[9px] font-semibold uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
+        {label}
+      </div>
+      <div className="font-semibold text-indigo-900 dark:text-indigo-100 truncate">{value}</div>
     </div>
   );
 }

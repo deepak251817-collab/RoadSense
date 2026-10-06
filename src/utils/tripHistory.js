@@ -38,6 +38,7 @@ export function createTrip({
   classification = "",
   incidentCount = null,
   potholeCount = null,
+  weather = null,
   startedAt = Date.now(),
 } = {}) {
   if (!hasCoord(originCoord) || !hasCoord(destCoord)) return null;
@@ -56,6 +57,7 @@ export function createTrip({
     classification: String(classification || ""),
     incidentCount: num(incidentCount),
     potholeCount: num(potholeCount),
+    weather: weather ? String(weather) : null,
     startedAt: num(startedAt, Date.now()),
     endedAt: null,
     arrived: false,
@@ -110,6 +112,7 @@ function sanitizeTrip(raw) {
     classification: String(raw.classification || ""),
     incidentCount: num(raw.incidentCount),
     potholeCount: num(raw.potholeCount),
+    weather: raw.weather ? String(raw.weather) : null,
     startedAt: num(raw.startedAt, 0),
     endedAt: num(raw.endedAt),
     arrived: Boolean(raw.arrived),
@@ -147,6 +150,30 @@ export function saveTripHistory(trips, storage = null) {
   }
 }
 
+/** Human label for a trip's route; falls back to coordinates. */
+function routeLabel(t) {
+  const from =
+    t.originLabel ||
+    `${Number(t.originCoord?.[1]).toFixed(4)}, ${Number(t.originCoord?.[0]).toFixed(4)}`;
+  const to =
+    t.destLabel || `${Number(t.destCoord?.[1]).toFixed(4)}, ${Number(t.destCoord?.[0]).toFixed(4)}`;
+  return `${from} → ${to}`;
+}
+
+/**
+ * Identity of a trip's origin→destination pair. Labels when both exist,
+ * otherwise rounded coordinates (so two unlabeled trips only merge when they
+ * really are the same endpoints).
+ */
+function routeKey(t) {
+  if (t.originLabel && t.destLabel) {
+    return `${t.originLabel.trim().toLowerCase()}→${t.destLabel.trim().toLowerCase()}`;
+  }
+  return `${Number(t.originCoord?.[0]).toFixed(5)},${Number(t.originCoord?.[1]).toFixed(5)}→${Number(
+    t.destCoord?.[0]
+  ).toFixed(5)},${Number(t.destCoord?.[1]).toFixed(5)}`;
+}
+
 /**
  * Aggregate stats over trip history (basis for safety analytics).
  * Only ended trips count toward duration/time metrics; open trips are
@@ -154,7 +181,8 @@ export function saveTripHistory(trips, storage = null) {
  *
  * @returns {{tripCount:number, activeCount:number, arrivedCount:number,
  *   totalKm:number, totalMinutes:number, avgSafety:number|null,
- *   totalIncidents:number, totalPotholes:number}}
+ *   totalIncidents:number, totalPotholes:number, hazardsEncountered:number,
+ *   withWeather:number, safestRoute:Object|null, mostFrequentRoute:Object|null}}
  */
 export function tripSummary(trips) {
   const list = Array.isArray(trips) ? trips.filter((t) => t && typeof t === "object") : [];
@@ -167,6 +195,45 @@ export function tripSummary(trips) {
       return null;
     })
     .filter((v) => v != null);
+
+  // Hazards actually encountered on ended trips (recorded counts only).
+  const hazardsEncountered = ended.reduce(
+    (sum, t) => sum + (num(t.incidentCount) || 0) + (num(t.potholeCount) || 0),
+    0
+  );
+
+  // Safest route actually driven: highest recorded safety score, ties → newest.
+  let safestRoute = null;
+  for (const t of ended) {
+    const score = num(t.safetyScore);
+    if (score == null) continue;
+    const startedAt = num(t.startedAt, 0);
+    if (
+      !safestRoute ||
+      score > safestRoute.safetyScore ||
+      (score === safestRoute.safetyScore && startedAt > safestRoute.startedAt)
+    ) {
+      safestRoute = {
+        label: routeLabel(t),
+        safetyScore: score,
+        classification: t.classification || "",
+        startedAt,
+      };
+    }
+  }
+
+  // Most frequent route by origin→destination pair (all recorded trips).
+  const counts = new Map();
+  for (const t of list) {
+    const key = routeKey(t);
+    const entry = counts.get(key) || { label: routeLabel(t), count: 0 };
+    entry.count += 1;
+    counts.set(key, entry);
+  }
+  let mostFrequentRoute = null;
+  for (const entry of counts.values()) {
+    if (!mostFrequentRoute || entry.count > mostFrequentRoute.count) mostFrequentRoute = entry;
+  }
 
   return {
     tripCount: list.length,
@@ -181,5 +248,9 @@ export function tripSummary(trips) {
       : null,
     totalIncidents: ended.reduce((sum, t) => sum + (num(t.incidentCount) || 0), 0),
     totalPotholes: ended.reduce((sum, t) => sum + (num(t.potholeCount) || 0), 0),
+    hazardsEncountered,
+    withWeather: list.filter((t) => t.weather).length,
+    safestRoute,
+    mostFrequentRoute,
   };
 }

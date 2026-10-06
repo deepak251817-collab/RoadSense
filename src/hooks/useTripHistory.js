@@ -27,6 +27,7 @@ import { distMeters } from "../utils/geo";
  * @param {string} ctx.sourceQuery origin label
  * @param {string} ctx.destQuery destination label
  * @param {number[]|null} ctx.userCoord live user position
+ * @param {string|null} [ctx.weatherLabel] weather condition known at trip start
  * @returns {{tripHistory:Array, persistTrips:Function}}
  */
 export default function useTripHistory({
@@ -38,9 +39,13 @@ export default function useTripHistory({
   sourceQuery,
   destQuery,
   userCoord,
+  weatherLabel = null,
 }) {
   const [tripHistory, setTripHistory] = useState([]);
   const activeTripRef = useRef(null); // { trip, routeIndex } — trip not yet ended
+  // Snapshot of the weather label at the moment a trip starts (never retriggers it)
+  const weatherRef = useRef(weatherLabel);
+  weatherRef.current = weatherLabel;
 
   const persistTrips = (updater) => {
     setTripHistory((prev) => {
@@ -78,6 +83,7 @@ export default function useTripHistory({
       classification: ana?.classification?.label ?? "",
       incidentCount: ana?.incidents?.count ?? null,
       potholeCount: ana?.potholes?.count ?? null,
+      weather: weatherRef.current ?? null,
     });
     if (!trip) return;
     activeTripRef.current = { trip, routeIndex: idx };
