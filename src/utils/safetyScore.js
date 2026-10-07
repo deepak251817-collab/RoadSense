@@ -452,3 +452,51 @@ export function calculateRoadSafetyScore(input = {}, { weights = DEFAULT_WEIGHTS
     },
   };
 }
+
+/**
+ * Shared confidence assessment for any scored result, derived from how many
+ * scoring factors actually had data (evidence coverage) — the same vocabulary
+ * and thresholds calculateRoadSafetyScore() uses. Estimated inputs cap High
+ * at Medium, and unavailable factors are listed explicitly (never guessed).
+ *
+ * @param {Object} factorRisks available factor risks (weight key → risk 0..100)
+ * @param {Object} [opts]
+ * @param {string[]} [opts.estimatedKeys] factors whose value is an estimate
+ * @param {Object} [opts.weights] weight table (default DEFAULT_WEIGHTS)
+ * @returns {{level:string,label:string,color:string,score:number,
+ *   availableFactors:number,totalFactors:number,reasons:string[]}}
+ */
+export function assessFactorConfidence(
+  factorRisks = {},
+  { estimatedKeys = [], weights = DEFAULT_WEIGHTS } = {}
+) {
+  const considered = Object.keys(weights).length;
+  const availableCount = Object.keys(factorRisks).filter((k) => k in weights).length;
+  const coverage = considered > 0 ? availableCount / considered : 0;
+
+  let band;
+  if (availableCount === 0) band = CONFIDENCE_BANDS[3]; // Insufficient Data
+  else if (coverage < 0.5) band = CONFIDENCE_BANDS[2]; // Low
+  else if (coverage < 0.8) band = CONFIDENCE_BANDS[1]; // Medium
+  else band = CONFIDENCE_BANDS[0]; // High
+  const hasEstimate = estimatedKeys.some((k) => factorRisks[k] != null);
+  if (band.key === "high" && hasEstimate) band = CONFIDENCE_BANDS[1];
+
+  const reasons = [];
+  for (const key of Object.keys(weights)) {
+    const label = FACTOR_LABELS[key] ?? key;
+    if (factorRisks[key] == null) reasons.push(`⚠ ${label} unavailable`);
+    else if (estimatedKeys.includes(key)) reasons.push(`⚠ ${label} (estimated)`);
+    else reasons.push(`✓ ${label} data available`);
+  }
+
+  return {
+    level: band.key,
+    label: band.label,
+    color: band.color,
+    score: Math.round(coverage * 100),
+    availableFactors: availableCount,
+    totalFactors: considered,
+    reasons,
+  };
+}

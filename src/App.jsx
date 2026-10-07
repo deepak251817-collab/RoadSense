@@ -3687,6 +3687,15 @@ export default function App() {
 										{recommendation.isFastest
 											? "Also the fastest available route."
 											: `${recommendation.timeDeltaMinutes > 0 ? `+${recommendation.timeDeltaMinutes} min` : "Same time"} vs fastest (+${recommendation.timeDeltaPct}%) · +${recommendation.safetyAdvantage} safety points`}
+										{routeAnalyses[recommendation.recommendedIndex].confidence && (
+											<span
+												className="ml-1 font-semibold"
+												style={{ color: routeAnalyses[recommendation.recommendedIndex].confidence.color }}
+												title={routeAnalyses[recommendation.recommendedIndex].confidence.reasons.join(" · ")}
+											>
+												 · Confidence: {routeAnalyses[recommendation.recommendedIndex].confidence.label} ({routeAnalyses[recommendation.recommendedIndex].confidence.availableFactors}/{routeAnalyses[recommendation.recommendedIndex].confidence.totalFactors} factors)
+											</span>
+										)}
 									</div>
 									{recommendationReasons.length > 0 && (
 										<div className="mt-2 rounded-lg bg-white/70 dark:bg-gray-900/50 border border-emerald-200 dark:border-emerald-800 p-2" role="group" aria-label="Why this route">
@@ -3856,6 +3865,15 @@ export default function App() {
 											{routeAnalyses[idx].missingFactors.length > 0 && ` · ${routeAnalyses[idx].missingFactors.length} factor(s) unavailable`}
 											{' '}· Typical safest window {String(safestWindow.startHour).padStart(2, '0')}:00–{String(safestWindow.endHour).padStart(2, '0')}:00 (risk {safestWindow.risk})
 										</div>
+										{routeAnalyses[idx].confidence && (
+											<div
+												className="text-[10px] font-semibold"
+												style={{ color: routeAnalyses[idx].confidence.color }}
+												title={routeAnalyses[idx].confidence.reasons.join(" · ")}
+											>
+												Confidence: {routeAnalyses[idx].confidence.label} ({routeAnalyses[idx].confidence.availableFactors}/{routeAnalyses[idx].confidence.totalFactors} factors)
+											</div>
+										)}
 									</div>
 								)}
 

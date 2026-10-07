@@ -52,6 +52,9 @@ export default function HotspotsPanel({ show, hotspots = [], hasReports, onClose
                       ? ` · ${h.recentCount} new in last ${HOTSPOT_CONFIG.recentDays}d`
                       : ""}
                   </span>
+                  <span className="block text-[10px] text-gray-400 dark:text-gray-500">
+                    Evidence: {h.count} report{h.count === 1 ? "" : "s"} in zone ({h.activeCount} active)
+                  </span>
                 </span>
                 <span
                   className={`flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded-full ${

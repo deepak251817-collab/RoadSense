@@ -40,6 +40,10 @@ export default function TripsPanel({ show, trips = [], stats, onClear, onClose }
               label="Average safety"
               value={stats.avgSafety != null ? String(stats.avgSafety) : "— no scored trips"}
             />
+            <Metric
+              label="Scored trips"
+              value={`${stats.scoredCount ?? 0} of ${stats.tripCount}`}
+            />
             <Metric label="Hazards encountered" value={String(stats.hazardsEncountered ?? 0)} />
             <Metric
               wide

@@ -59,6 +59,11 @@ export default function AnalyticsPanel({ show, analytics, onClose }) {
           </div>
         ))}
       </div>
+      {/* Evidence base for the metrics above */}
+      <div className="-mt-1 mb-3 text-[10px] text-gray-500 dark:text-gray-400">
+        Evidence base: {hazards.total} stored report{hazards.total === 1 ? "" : "s"} ·{" "}
+        {trips.scoredCount ?? 0} of {trips.tripCount} trips safety-scored
+      </div>
       {/* Weekly report trend */}
       <div className="rounded-xl bg-white dark:bg-gray-900 border border-teal-200 dark:border-teal-800 p-3 mb-3">
         <div className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 mb-1">

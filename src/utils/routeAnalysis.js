@@ -18,6 +18,7 @@ import {
   calculateRouteSafetyScore,
   classifySafetyScore,
   classifyTimeRisk,
+  assessFactorConfidence,
 } from "./safetyScore";
 import { isPotholeType } from "./hazardTypes";
 import { pointLineDistMeters, isValidCoord } from "./geo";
@@ -191,6 +192,13 @@ export function analyzeRoute(route, index, ctx = {}) {
     time: timeRisk,
   });
 
+  // Evidence coverage for this analysis: which factors actually had data.
+  // A step-speed traffic estimate caps confidence at Medium (same rule as
+  // the centralized engine).
+  const confidence = assessFactorConfidence(factorRisks, {
+    estimatedKeys: traffic.estimated ? ["traffic"] : [],
+  });
+
   return {
     index,
     label: `Route ${index + 1}`,
@@ -221,6 +229,7 @@ export function analyzeRoute(route, index, ctx = {}) {
     classification: classifySafetyScore(score),
     factorRisks,
     missingFactors,
+    confidence,
   };
 }
 

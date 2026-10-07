@@ -181,6 +181,7 @@ function routeKey(t) {
  *
  * @returns {{tripCount:number, activeCount:number, arrivedCount:number,
  *   totalKm:number, totalMinutes:number, avgSafety:number|null,
+ *   scoredCount:number,
  *   totalIncidents:number, totalPotholes:number, hazardsEncountered:number,
  *   withWeather:number, safestRoute:Object|null, mostFrequentRoute:Object|null}}
  */
@@ -246,6 +247,8 @@ export function tripSummary(trips) {
     avgSafety: scores.length
       ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
       : null,
+    /** How many ended trips actually carried a safety score (the evidence behind avgSafety). */
+    scoredCount: scores.length,
     totalIncidents: ended.reduce((sum, t) => sum + (num(t.incidentCount) || 0), 0),
     totalPotholes: ended.reduce((sum, t) => sum + (num(t.potholeCount) || 0), 0),
     hazardsEncountered,
