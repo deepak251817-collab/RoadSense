@@ -24,6 +24,12 @@ import {
   replaceHazards,
   startAdminSession,
 } from "./services/hazardService";
+import {
+  addConfirmation,
+  confirmationCount,
+  findDuplicateCandidate,
+  mergeDuplicateReport,
+} from "./utils/crowdsourcing";
 import { analyzeRouteSegments } from "./utils/segmentRisk";
 import {
   tripSummary,
@@ -2270,6 +2276,7 @@ export default function App() {
 				wrap.style.color = "#111827";
 				// Build safe metadata block (severity, date, status, coordinates, description)
 				const repConfidence = assessReportConfidence(cluster.reports);
+				const totalConfirmations = cluster.reports.reduce((n, r) => n + confirmationCount(r), 0);
 				const meta = document.createElement("div");
 				meta.style.marginTop = "6px";
 				const displayedTs = rep.captureAt || rep.createdAt;
@@ -2287,6 +2294,7 @@ export default function App() {
 						<div><strong>${typeLabel} · ${sev}</strong> • ${createdAt}</div>
 					${statusBadge}
 					<div style="margin-top:4px;font-size:10px;font-weight:600;color:#374151;">System confidence: ${repConfidence.level} (${repConfidence.score}/100)</div>
+					<div style="margin-top:4px;font-size:10px;color:#4b5563;">Confirmations: ${totalConfirmations} · evidence only (admin verifies)</div>
 					${rep.reportedToBBMP ? '<div style="margin-top:4px;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:#312e81;color:#c7d2fe;">Reported to BBMP</div>' : ''}
 					${coordLine ? `<div style="color:#4b5563;font-size:11px;margin-top:2px;">${coordLine}</div>` : ""}
 					${safeDesc ? `<div style=\"color:#6b7280;margin-top:4px;\">${safeDesc}</div>` : ""}
@@ -2316,6 +2324,25 @@ export default function App() {
 					wrap.appendChild(clusterInfo);
 				}
 				wrap.appendChild(meta);
+				// Multi-user confirmation button (visible to everyone, never verifies)
+				const confirmBtn = document.createElement('button');
+				confirmBtn.textContent = totalConfirmations > 0 ? `Confirm (${totalConfirmations})` : 'Confirm this hazard';
+				confirmBtn.setAttribute('aria-label', 'Confirm this hazard');
+				confirmBtn.style.marginTop = '8px';
+				confirmBtn.style.width = '100%';
+				confirmBtn.style.padding = '6px 10px';
+				confirmBtn.style.borderRadius = '6px';
+				confirmBtn.style.border = '1px solid #86efac';
+				confirmBtn.style.background = '#f0fdf4';
+				confirmBtn.style.color = '#166534';
+				confirmBtn.style.cursor = 'pointer';
+				confirmBtn.addEventListener('click', (e) => {
+					e.stopPropagation(); e.preventDefault();
+					confirmHazard(rep.id);
+					// Marker refresh happens via the [userReports] effect with fresh
+					// data — a timeout here would re-render from this stale closure.
+				});
+				wrap.appendChild(confirmBtn);
 				// Add an explicit close button inside popup content
 				const closeBtn = document.createElement("button");
 				closeBtn.textContent = "Close";
@@ -2691,14 +2718,42 @@ export default function App() {
 			fixRequestedAt: null,
 			reportedToBBMP: false,
 		};
-		setUserReports((prev) => {
-			const arr = [...prev, newRep];
-			persistReports(arr);
-			return arr;
-		});
+		// Multi-user aggregation: another report of the same type within 20 m is
+		// evidence for the existing hazard, not a second hazard record.
+		const dup = findDuplicateCandidate(userReports, newRep);
+		if (dup) {
+			setUserReports((prev) => {
+				const arr = prev.map((r) => (r.id === dup.report.id ? mergeDuplicateReport(r, newRep) : r));
+				persistReports(arr);
+				return arr;
+			});
+			setNotice({
+				type: 'info',
+				message: `Linked to an existing hazard ${dup.distanceMeters} m away — recorded as extra evidence (not auto-verified).`,
+			});
+			setTimeout(() => setNotice(null), 5000);
+		} else {
+			setUserReports((prev) => {
+				const arr = [...prev, newRep];
+				persistReports(arr);
+				return arr;
+			});
+		}
 		// reset form
 		setReportForm({ coord: null, coordSource: null, type: DEFAULT_HAZARD_TYPE, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
 		// no map picking to disable
+	};
+
+	// Multi-user confirmation: another user vouches for an existing hazard.
+	// Evidence only — verification stays an explicit admin action.
+	const confirmHazard = (id) => {
+		setUserReports((prev) => {
+			const arr = prev.map((r) => (r.id === id ? addConfirmation(r, { source: 'user' }) : r));
+			persistReports(arr);
+			return arr;
+		});
+		setNotice({ type: 'success', message: 'Confirmation recorded — extra evidence, verification stays with the admin.' });
+		setTimeout(() => setNotice(null), 4000);
 	};
 
 	const deleteReport = (id) => {
