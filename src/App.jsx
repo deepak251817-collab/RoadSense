@@ -3524,20 +3524,25 @@ export default function App() {
 							<MapLayersPopover
 								open={layersMenuOpen}
 								onToggle={() => setLayersMenuOpen((v) => !v)}
-								bbmpLoaded={bbmpLoaded}
-							layers={[
-								{ label: 'Road Risk', checked: roadRiskOn, onChange: setRoadRiskOn },
-								{ label: 'Incidents', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
-								{ label: 'Safety heatmap', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
-								{ label: 'Fixed potholes', checked: showFixed, onChange: setShowFixed },
-								{ label: 'BBMP potholes', checked: bbmpVisible, onChange: setBbmpVisible },
-							]}
-							lower={[
-								{ label: 'Weather forecasts', hint: 'forecast points along the route', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
-								{ label: 'Hazard markers', hint: 'reported hazards on the map', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
-								{ label: 'Live routing', hint: 'live traffic overlay on routes', checked: congestionVisible, onChange: setCongestionVisible },
-							]}
-							/>
+								bbmpLoaded={bbmpLoaded}								groups={[
+									{ title: 'Navigation', items: [
+										{ label: 'Live routing', hint: 'live traffic overlay on routes', checked: congestionVisible, onChange: setCongestionVisible },
+										{ label: 'Weather forecasts', hint: 'forecast points along the route', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
+									] },
+									{ title: 'Safety', items: [
+										{ label: 'Road Risk', hint: 'road risk overlay along the route', checked: roadRiskOn, onChange: setRoadRiskOn },
+									] },
+									{ title: 'Hazards', items: [
+										{ label: 'Incidents', hint: 'live incident markers', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
+										{ label: 'Hazard markers', hint: 'reported hazards on the map', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
+										{ label: 'Fixed potholes', hint: 'repaired reports kept for reference', checked: showFixed, onChange: setShowFixed },
+										{ label: 'BBMP potholes', hint: 'civic pothole dataset', checked: bbmpVisible, onChange: setBbmpVisible },
+									] },
+									{ title: 'Analytics', items: [
+										{ label: 'Safety heatmap', hint: 'weighted hazard density (severity × recency)', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
+									] },
+								]}
+								/>
 							<button
 								onClick={() => setFullMap((v) => !v)}
 								title={fullMap ? 'Exit full view' : 'Full view'}
