@@ -3272,9 +3272,11 @@ export default function App() {
 									setSourceCoord(null); setDestCoord(null); setStops([]);
 									setSourceQuery(""); setDestQuery(""); setSourceSuggestions([]); setDestSuggestions([]);
 									const map = window._mapInstance; if (map) {
-										if (map.getLayer('route-primary')) map.removeLayer('route-primary');
-										if (map.getLayer('routes-alt')) map.removeLayer('routes-alt');
-										if (map.getSource('routes')) map.removeSource('routes');
+										try {
+											if (map.getLayer('route-primary')) map.removeLayer('route-primary');
+											if (map.getLayer('routes-alt')) map.removeLayer('routes-alt');
+											if (map.getSource('routes')) map.removeSource('routes');
+										} catch { /* mapbox can throw from internal terrain state on removal */ }
 										[sourceMarkerRef.current, destMarkerRef.current, ...stopMarkersRef.current].forEach((mk) => { if (mk) try { mk.remove(); } catch { } });
 									}
 									stopMarkersRef.current = [];
