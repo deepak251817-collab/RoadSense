@@ -11,7 +11,7 @@ import {
   saveTripHistory,
   upsertTrip,
   MAX_TRIPS,
-} from "./utils/tripHistory.js";
+} from "./src/features/community/tripHistory.js";
 
 let passed = 0;
 function t(name, fn) {

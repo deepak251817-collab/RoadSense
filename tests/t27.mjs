@@ -50,18 +50,28 @@ t("App.jsx has no static recharts import", () => {
 
 t("App.jsx lazy-loads all three chart consumers", () => {
   const app = read("src/App.jsx");
-  for (const name of ["AnalyticsPanel", "PredictiveSafetyPanel", "TrafficChart"]) {
+  const lazyPaths = {
+    AnalyticsPanel: "./features/community/AnalyticsPanel",
+    PredictiveSafetyPanel: "./features/safety/PredictiveSafetyPanel",
+    TrafficChart: "./features/routing/TrafficChart",
+  };
+  for (const [name, spec] of Object.entries(lazyPaths)) {
     assert.ok(
-      app.includes(`React.lazy(() => import("./components/${name}"))`),
-      `${name} is not lazy-imported in App.jsx`
+      app.includes(`React.lazy(() => import("${spec}"))`),
+      `${name} is not lazy-imported in App.jsx (expected ${spec})`
     );
   }
   assert.ok(app.includes("<Suspense"), "Suspense boundaries missing in App.jsx");
 });
 
 t("heavy panels are memoized", () => {
-  for (const f of ["AnalyticsPanel", "PredictiveSafetyPanel", "TripsPanel"]) {
-    const src = read(`src/components/${f}.jsx`);
+  const memoFiles = {
+    AnalyticsPanel: "src/features/community/AnalyticsPanel.jsx",
+    PredictiveSafetyPanel: "src/features/safety/PredictiveSafetyPanel.jsx",
+    TripsPanel: "src/features/community/TripsPanel.jsx",
+  };
+  for (const [f, path] of Object.entries(memoFiles)) {
+    const src = read(path);
     assert.ok(src.includes(`export default memo(${f});`), `${f} not wrapped in React.memo`);
   }
 });

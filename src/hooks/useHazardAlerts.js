@@ -7,13 +7,13 @@
  * pending → shown → dismissed → expired lifecycle.
  */
 import { useEffect, useRef, useState } from "react";
-import { cumulativeDistances, nearestSegment } from "../utils/geo";
+import { cumulativeDistances, nearestSegment } from "../features/routing/geo";
 import {
   ALERT_CONFIG,
   classifyIncidentForAlert,
   evaluateHazardAlerts,
   dismissHazardAlert,
-} from "../utils/hazardAlerts";
+} from "../features/safety/hazardAlerts";
 
 /**
  * @param {Object} args

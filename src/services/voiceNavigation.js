@@ -5,7 +5,7 @@
  * Every entry point degrades to a silent no-op when Speech Synthesis is not
  * available (older browsers, SSR, tests).
  */
-import { nearestSegment } from "../utils/geo";
+import { nearestSegment } from "../features/routing/geo";
 
 const STORAGE_KEYS = {
   navigation: "voiceNavigationEnabled",

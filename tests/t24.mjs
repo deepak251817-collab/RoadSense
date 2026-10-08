@@ -17,7 +17,7 @@ import {
   likelyDuplicate,
   mergeDuplicateReport,
   summarizeCluster,
-} from "./utils/crowdsourcing.js";
+} from "./src/features/community/crowdsourcing.js";
 
 let passed = 0;
 async function t(name, fn) {

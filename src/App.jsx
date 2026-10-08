@@ -11,13 +11,13 @@ import {
   processImageCoordinates,
   detectPotholes,
 } from "./services/potholeDetection";
-import { clusterReports } from "./utils/clustering";
-import { assessReportConfidence, locationConfidence } from "./utils/confidence";
-import { HAZARD_TYPES, DEFAULT_HAZARD_TYPE, hazardTypeMeta } from "./utils/hazardTypes";
-import { buildSafetyHeatmapData } from "./utils/heatmap";
-import { detectHotspots } from "./utils/hotspots";
-import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./utils/safetyScore";
-import { predictRoadRiskAllHorizons } from "./utils/prediction";
+import { clusterReports } from "./features/safety/clustering";
+import { assessReportConfidence, locationConfidence } from "./features/safety/confidence";
+import { HAZARD_TYPES, DEFAULT_HAZARD_TYPE, hazardTypeMeta } from "./features/safety/hazardTypes";
+import { buildSafetyHeatmapData } from "./features/safety/heatmap";
+import { detectHotspots } from "./features/safety/hotspots";
+import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "./features/safety/safetyScore";
+import { predictRoadRiskAllHorizons } from "./features/safety/prediction";
 import {
   endAdminSession,
   loadHazards,
@@ -29,60 +29,60 @@ import {
   confirmationCount,
   findDuplicateCandidate,
   mergeDuplicateReport,
-} from "./utils/crowdsourcing";
-import { analyzeRouteSegments } from "./utils/segmentRisk";
+} from "./features/community/crowdsourcing";
+import { analyzeRouteSegments } from "./features/routing/segmentRisk";
 import {
   tripSummary,
-} from "./utils/tripHistory";
+} from "./features/community/tripHistory";
 import useTripHistory from "./hooks/useTripHistory";
-import { computeSafetyAnalytics } from "./utils/analytics";
+import { computeSafetyAnalytics } from "./features/community/analytics";
 import {
   normalizeStatus,
   nextStatuses,
   STATUS_LABELS,
   STATUS_STYLES,
   STATUS_ORDER,
-} from "./utils/hazardLifecycle";
-import { analyzeRoutes, collectRouteReports } from "./utils/routeAnalysis";
-import { recommendRoute, buildRecommendationReasons } from "./utils/recommendation";
+} from "./features/admin/hazardLifecycle";
+import { analyzeRoutes, collectRouteReports } from "./features/routing/routeAnalysis";
+import { recommendRoute, buildRecommendationReasons } from "./features/routing/recommendation";
 import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "./services/incidentService";
 import { fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
-import HazardAlertStack from "./components/HazardAlertStack";
-import HotspotsPanel from "./components/HotspotsPanel";
-import TripsPanel from "./components/TripsPanel";
+import HazardAlertStack from "./features/safety/HazardAlertStack";
+import HotspotsPanel from "./features/safety/HotspotsPanel";
+import TripsPanel from "./features/community/TripsPanel";
 
-import SegmentRiskStrip from "./components/SegmentRiskStrip";
-import WaterloggingPanel from "./components/WaterloggingPanel";
-import { assessWaterloggingRisk } from "./utils/waterlogging";
-import NightSafetyPanel from "./components/NightSafetyPanel";
-import { assessNightSafety } from "./utils/nightSafety";
-import RoadHealthPanel from "./components/RoadHealthPanel";
-import { roadHealthIndex } from "./utils/roadHealth";
-import ChangeDetectionPanel from "./components/ChangeDetectionPanel";
+import SegmentRiskStrip from "./features/routing/SegmentRiskStrip";
+import WaterloggingPanel from "./features/road-conditions/WaterloggingPanel";
+import { assessWaterloggingRisk } from "./features/road-conditions/waterlogging";
+import NightSafetyPanel from "./features/road-conditions/NightSafetyPanel";
+import { assessNightSafety } from "./features/road-conditions/nightSafety";
+import RoadHealthPanel from "./features/road-conditions/RoadHealthPanel";
+import { roadHealthIndex } from "./features/road-conditions/roadHealth";
+import ChangeDetectionPanel from "./features/road-conditions/ChangeDetectionPanel";
 import {
   detectChanges,
   captureReportSnapshot,
   mergeChangeSnapshot,
   loadChangeSnapshots,
   saveChangeSnapshots,
-} from "./utils/changeDetection";
-import RepairPriorityPanel from "./components/RepairPriorityPanel";
-import { rankRepairs } from "./utils/repairPriority";
-import MunicipalDashboard from "./components/MunicipalDashboard";
-import { summarizeMunicipal } from "./utils/municipalSummary";
-import WhatIfPanel from "./components/WhatIfPanel";
-import { runWhatIf } from "./utils/whatIf";
-import RoutePreferencesPanel from "./components/RoutePreferencesPanel";
+} from "./features/road-conditions/changeDetection";
+import RepairPriorityPanel from "./features/admin/RepairPriorityPanel";
+import { rankRepairs } from "./features/admin/repairPriority";
+import MunicipalDashboard from "./features/admin/MunicipalDashboard";
+import { summarizeMunicipal } from "./features/admin/municipalSummary";
+import WhatIfPanel from "./features/routing/WhatIfPanel";
+import { runWhatIf } from "./features/routing/whatIf";
+import RoutePreferencesPanel from "./features/routing/RoutePreferencesPanel";
 import {
   ROUTE_PREFERENCES_LABEL,
   recommendationConfigFor,
   buildExcludeParam,
   loadRoutePreferences,
   saveRoutePreferences,
-} from "./utils/routePreferences";
-import EmergencyPanel from "./components/EmergencyPanel";
-import { EMERGENCY_LABEL, buildEmergencyContext } from "./utils/emergencyMode";
-import MapLayersPopover from "./components/MapLayersPopover";
+} from "./features/routing/routePreferences";
+import EmergencyPanel from "./features/emergency/EmergencyPanel";
+import { EMERGENCY_LABEL, buildEmergencyContext } from "./features/emergency/emergencyMode";
+import MapLayersPopover from "./features/map/MapLayersPopover";
 import useHazardAlerts from "./hooks/useHazardAlerts";
 import {
   isSpeechSupported,
@@ -93,12 +93,12 @@ import {
   speakSafetyWarning,
   pickNextStepAnnouncement,
 } from "./services/voiceNavigation";
-import { distMeters } from "./utils/geo";
+import { distMeters } from "./features/routing/geo";
 // Chart-heavy UI is lazy-loaded so recharts stays out of the initial bundle
 // (t27.mjs asserts the charts chunk is absent from dist/index.html).
-const AnalyticsPanel = React.lazy(() => import("./components/AnalyticsPanel"));
-const PredictiveSafetyPanel = React.lazy(() => import("./components/PredictiveSafetyPanel"));
-const TrafficChart = React.lazy(() => import("./components/TrafficChart"));
+const AnalyticsPanel = React.lazy(() => import("./features/community/AnalyticsPanel"));
+const PredictiveSafetyPanel = React.lazy(() => import("./features/safety/PredictiveSafetyPanel"));
+const TrafficChart = React.lazy(() => import("./features/routing/TrafficChart"));
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -1371,6 +1371,7 @@ export default function App() {
 		const map = window._mapInstance;
 		if (!map || !sourceCoord || !destCoord) return;
 		setRoutesLoading(true);
+		setMapError(null); // fresh attempt — drop any previous error banner
 		try {
 			const profile = "driving"; // could be walking, cycling, driving-traffic
 			const coordsList = [sourceCoord, ...stops, destCoord]

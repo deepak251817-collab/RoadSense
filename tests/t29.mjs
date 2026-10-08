@@ -1,5 +1,6 @@
 // t29.mjs — P29: accessibility & responsive guards (runs from app root, text-level assertions)
 import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 let pass = 0, fail = 0;
 const ok = (cond, name) => {
@@ -10,10 +11,17 @@ const ok = (cond, name) => {
 const app = readFileSync("src/App.jsx", "utf8");
 const css = readFileSync("src/index.css", "utf8");
 const html = readFileSync("index.html", "utf8");
-// aria coverage spans App + every component file
-const componentSrc = readdirSync("src/components")
-  .filter((f) => f.endsWith(".jsx"))
-  .map((f) => readFileSync(`src/components/${f}`, "utf8"))
+// aria coverage spans App + every component file (app-shell + feature folders)
+const walkJsx = (dir) =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory()
+      ? walkJsx(join(dir, e.name))
+      : e.name.endsWith(".jsx")
+        ? [join(dir, e.name)]
+        : []
+  );
+const componentSrc = [...walkJsx("src/components"), ...walkJsx("src/features")]
+  .map((f) => readFileSync(f, "utf8"))
   .join("\n");
 const allJsx = app + "\n" + componentSrc;
 

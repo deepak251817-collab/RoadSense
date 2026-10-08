@@ -13,7 +13,7 @@
  * Nothing is ever synthesized: when a source is unavailable it contributes no
  * incidents and is reported as unavailable.
  */
-import { pointLineDistMeters, distMeters, isValidCoord } from "../utils/geo";
+import { pointLineDistMeters, distMeters, isValidCoord } from "../features/routing/geo";
 import { fetchWithTimeout } from "./httpClient";
 
 /** Supported incident types. */

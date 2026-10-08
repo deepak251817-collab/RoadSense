@@ -1,21 +1,20 @@
 #!/usr/bin/env node
 /**
- * STARS regression runner (P30) — no external dependencies.
+ * STARS regression runner — no external dependencies.
  *
- * Two kinds of suites live in this directory:
- *  - module suites (import project code, e.g. t21–t26): source modules use
- *    extensionless relative imports which Node ESM cannot resolve, so the runner
- *    builds a temp harness (copies of src/utils + src/services with .js
- *    extensions added) and runs the suite there — the same harness convention
- *    used during development.
+ * Suites come in two kinds:
+ *  - module suites (t21–t26): import app code via ./src/… specifiers. Source
+ *    modules use extensionless relative imports (Vite-style) that Node ESM
+ *    cannot resolve, so the runner mirrors src/ into a temp harness, adds .js
+ *    extensions to relative imports, and runs the suite there.
  *  - source/bundle suites (t27–t29): read files from the repo (src/, dist/,
- *    index.html) and must run with the repo root as cwd.
+ *    index.html) and run with the repo root as cwd.
  *
  * Usage: npm test   (or: node tests/run-all.mjs)
  */
 import { spawnSync } from "node:child_process";
 import {
-  cpSync, existsSync, mkdtempSync, mkdirSync, readFileSync,
+  cpSync, existsSync, mkdtempSync, readFileSync,
   readdirSync, rmSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -34,15 +33,22 @@ if (!suites.length) {
   process.exit(1);
 }
 
-// Add .js to relative imports idempotently (Node ESM cannot resolve
-// the extensionless imports Vite accepts).
+// Add .js to relative imports idempotently (Node ESM cannot resolve the
+// extensionless relative imports that Vite accepts).
 const addExtensions = (src) =>
   src.replace(/from "(\.[^"]*?)(\.js)?";/g, 'from "$1.js";');
 
-// A suite is a "module suite" if it imports project code by relative path.
-const isModuleSuite = (code) =>
-  /^import[\s\S]*?from "\.\/(src|utils|services)\//m.test(code) ||
-  /^} from "\.\/(src|utils|services)\//m.test(code);
+// A module suite imports app code through ./src/… specifiers.
+const isModuleSuite = (code) => /^import[\s\S]*?from "\.\/src\//m.test(code);
+
+function walkJs(dir, out = []) {
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) walkJs(p, out);
+    else if (e.name.endsWith(".js")) out.push(p);
+  }
+  return out;
+}
 
 const ensureDist = () => {
   if (existsSync(join(ROOT, "dist", "index.html"))) return;
@@ -57,33 +63,22 @@ const results = [];
 for (const file of suites) {
   const path = join(TESTS, file);
   const code = readFileSync(path, "utf8");
-  const needsDist = code.includes("dist/");
-  if (needsDist) ensureDist();
+  if (code.includes("dist/")) ensureDist();
 
   let status = 0;
   let out = "";
 
   if (isModuleSuite(code)) {
-    // Temp harness: copies of utils + services with resolvable imports.
+    // Temp harness: full mirror of src/ with resolvable imports.
     const T = mkdtempSync(join(tmpdir(), "stars-test-"));
     try {
-      mkdirSync(join(T, "utils"));
-      mkdirSync(join(T, "services"));
-      cpSync(join(ROOT, "src", "utils"), join(T, "utils"), { recursive: true });
-      cpSync(join(ROOT, "src", "services"), join(T, "services"), { recursive: true });
-      for (const dir of ["utils", "services"]) {
-        for (const f of readdirSync(join(T, dir))) {
-          if (!f.endsWith(".js")) continue;
-          const p = join(T, dir, f);
-          const src = readFileSync(p, "utf8");
-          const rewritten = addExtensions(src);
-          if (rewritten !== src) writeFileSync(p, rewritten);
-        }
+      cpSync(join(ROOT, "src"), join(T, "src"), { recursive: true });
+      for (const p of walkJs(join(T, "src"))) {
+        const src = readFileSync(p, "utf8");
+        const rewritten = addExtensions(src);
+        if (rewritten !== src) writeFileSync(p, rewritten);
       }
-      const suiteCode = code
-        .replace(/from "\.\/src\/utils\//g, 'from "./utils/')
-        .replace(/from "\.\/src\/services\//g, 'from "./services/');
-      writeFileSync(join(T, file), suiteCode);
+      writeFileSync(join(T, file), code);
       const r = spawnSync("node", [file], { cwd: T, encoding: "utf8", timeout: 60000 });
       status = r.status ?? 1;
       out = `${r.stdout || ""}${r.stderr || ""}`;

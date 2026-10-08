@@ -6,8 +6,8 @@ import {
   replaceTrip,
   loadTripHistory,
   saveTripHistory,
-} from "../utils/tripHistory";
-import { distMeters } from "../utils/geo";
+} from "../features/community/tripHistory";
+import { distMeters } from "../features/routing/geo";
 
 /**
  * Trip history recorder.

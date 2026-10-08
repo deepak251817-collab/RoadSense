@@ -29,9 +29,9 @@ import {
   createLocalRepository,
   createRepository,
 } from "./backend";
-import { roadHealthIndex, ROAD_HEALTH_LABEL } from "../utils/roadHealth";
-import { rankRepairs, PRIORITY_LABEL } from "../utils/repairPriority";
-import { recommendRoute, buildRecommendationReasons } from "../utils/recommendation";
+import { roadHealthIndex, ROAD_HEALTH_LABEL } from "../features/road-conditions/roadHealth";
+import { rankRepairs, PRIORITY_LABEL } from "../features/admin/repairPriority";
+import { recommendRoute, buildRecommendationReasons } from "../features/routing/recommendation";
 
 /* ------------------------------------------------------------------ *
  * Admin session

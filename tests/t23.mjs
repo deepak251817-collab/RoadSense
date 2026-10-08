@@ -19,8 +19,8 @@ import {
   requireAdminSession,
   setHazardVerification,
   startAdminSession,
-} from "./services/hazardService.js";
-import { API_ENDPOINTS, DOMAINS } from "./services/backend.js";
+} from "./src/services/hazardService.js";
+import { API_ENDPOINTS, DOMAINS } from "./src/services/backend.js";
 
 let passed = 0;
 async function t(name, fn) {

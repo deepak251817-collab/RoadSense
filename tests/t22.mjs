@@ -13,7 +13,7 @@ import {
   createLocalRepository,
   createRepository,
   isBackendConfigured,
-} from "./services/backend.js";
+} from "./src/services/backend.js";
 
 let passed = 0;
 

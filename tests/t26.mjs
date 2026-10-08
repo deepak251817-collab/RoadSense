@@ -1,6 +1,6 @@
 /** P26 — map control grouping tests. */
 import assert from "node:assert/strict";
-import { CONTROL_GROUP_ORDER, normalizeControlGroups } from "./src/utils/controlGroups.js";
+import { CONTROL_GROUP_ORDER, normalizeControlGroups } from "./src/features/map/controlGroups.js";
 
 let passed = 0;
 const t = (name, fn) => {

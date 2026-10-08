@@ -12,7 +12,7 @@
  * returned; OCR is explicitly a heuristic fallback, never a guaranteed fix.
  */
 import exifr from "exifr";
-import { isValidCoord } from "../utils/geo";
+import { isValidCoord } from "../features/routing/geo";
 
 /** Downscale an image URL/dataURL to keep storage and popups light. */
 export function downscaleImage(src, { maxW = 1200, maxH = 1200, quality = 0.85 } = {}) {

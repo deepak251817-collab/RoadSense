@@ -1,9 +1,9 @@
 /** P25 — confidence & evidence indicators tests. */
 import assert from "node:assert/strict";
-import { assessFactorConfidence, calculateTrafficRisk } from "./src/utils/safetyScore.js";
-import { analyzeRoute } from "./src/utils/routeAnalysis.js";
-import { tripSummary } from "./src/utils/tripHistory.js";
-import { computeSafetyAnalytics } from "./src/utils/analytics.js";
+import { assessFactorConfidence, calculateTrafficRisk } from "./src/features/safety/safetyScore.js";
+import { analyzeRoute } from "./src/features/routing/routeAnalysis.js";
+import { tripSummary } from "./src/features/community/tripHistory.js";
+import { computeSafetyAnalytics } from "./src/features/community/analytics.js";
 
 let passed = 0;
 const t = (name, fn) => {
