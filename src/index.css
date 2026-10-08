@@ -110,6 +110,10 @@ html, body, #root {
   .stars-btn-danger {
     @apply stars-btn bg-red-600 text-white hover:bg-red-700;
   }
+  /* Toggle buttons (pick source/destination): active state via aria-pressed */
+  .stars-btn-secondary[aria-pressed='true'] {
+    @apply bg-primary-600 border-primary-600 text-white hover:bg-primary-700 hover:border-primary-700;
+  }
 
   /* ---------- Inputs ---------- */
   .stars-input {

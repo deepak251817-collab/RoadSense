@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -2897,23 +2897,78 @@ export default function App() {
 		}
 	}, []);
 
+	// Route-result teardown shared by "Clear all" and endpoint Swap:
+	// removes route layers/markers and route-derived state, keeps inputs.
+	const clearRouteResults = () => {
+		const map = window._mapInstance;
+		if (map) {
+			// Same cleanup list as drawRoutesOnMap() — including route-labels and
+			// congestion-overlay, otherwise "Route 1/2" labels and the traffic
+			// overlay linger after clearing. Each removal guarded individually:
+			// mapbox can throw from internal terrain state on removal.
+			['route-primary', 'routes-alt', 'route-labels', 'congestion-overlay'].forEach((l) => {
+				try { if (map.getLayer(l)) map.removeLayer(l); } catch { }
+			});
+			['routes', 'route-labels', 'congestion'].forEach((s) => {
+				try { if (map.getSource(s)) map.removeSource(s); } catch { }
+			});
+			[sourceMarkerRef.current, destMarkerRef.current, ...stopMarkersRef.current].forEach((mk) => { if (mk) try { mk.remove(); } catch { } });
+		}
+		stopMarkersRef.current = [];
+		sourceMarkerRef.current = null;
+		destMarkerRef.current = null;
+		setRoutes([]); setSelectedRouteId(null);
+		Object.keys(weatherMarkersRef.current).forEach((k) => { (weatherMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); weatherMarkersRef.current[k] = []; });
+		setRouteWeather({}); setOpenWeatherId(null);
+		Object.keys(potholeMarkersRef.current).forEach((k) => { (potholeMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); potholeMarkersRef.current[k] = []; });
+		setPotholesByRoute({}); setOpenPotholeId(null); setCongestionSegments([]);
+	};
+
+	// Swap origin and destination (text, coords, lock state). Results of a
+	// previous A→B search are directionally wrong after a swap, so they are
+	// cleared and the user is asked to re-run Find Routes — never shown stale.
+	const swapEndpoints = () => {
+		if (!sourceCoord && !destCoord && !sourceQuery && !destQuery) return;
+		const hadResults = routes.length > 0;
+		clearRouteResults();
+		setSourceQuery(destQuery); setDestQuery(sourceQuery);
+		setSourceCoord(destCoord); setDestCoord(sourceCoord);
+		setSourceLocked(destLocked); setDestLocked(sourceLocked);
+		setSourceSuggestions([]); setDestSuggestions([]);
+		if (stops.length) setTimeout(() => { try { renderStopMarkers(stops); } catch { } }, 0);
+		if (hadResults) {
+			setNotice({ type: 'info', message: 'Origin and destination swapped — run Find Routes to recalculate.' });
+			setTimeout(() => setNotice((n) => (n && n.type === 'info' ? null : n)), 4000);
+		}
+	};
+
+	// Journey stepper state: Origin → Destination → Analyze → Compare → Navigate
+	const journeySteps = [
+		{ label: 'Origin', done: Boolean(sourceCoord) },
+		{ label: 'Destination', done: Boolean(destCoord) },
+		{ label: 'Analyze', done: routes.length > 0 },
+		{ label: 'Compare', done: routes.length > 1 },
+		{ label: 'Navigate', done: routes.length > 0 && selectedRouteId != null },
+	];
+
 	return (
-		<div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:bg-gradient-to-br dark:from-gray-900 dark:via-slate-900 dark:to-indigo-950 text-gray-900 dark:text-gray-100">
+		<div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
 			{/* Accessibility: keyboard users can jump past the header */}
 			<a href="#main-content" className="sr-only-focusable fixed top-2 left-2 z-[100] px-3 py-2 rounded-lg bg-white text-indigo-700 shadow-lg border-2 border-indigo-300 font-semibold text-sm">Skip to main content</a>
-			<header className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 shadow-xl backdrop-blur-sm">
-				<div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-3 sm:gap-4 text-white">
+			<header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-card">
+					<div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 text-gray-900 dark:text-gray-100">
 					<div className="flex items-center gap-3">
-						<div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm shadow-lg">
-							<MapPin className="w-6 h-6 sm:w-7 sm:h-7" />
+						<div className="p-1.5 bg-primary-600 text-white rounded-control shadow-card">
+							<MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
 						</div>
 						<div>
-							<h1 className="text-2xl sm:text-3xl font-bold tracking-tight">STARS</h1>
-							<p className="text-xs opacity-90 font-medium">Route Finder</p>
+							<h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-none">STARS</h1>
+							<p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Smart Traffic &amp; Road Safety Assistant</p>
 						</div>
+						<span className={adminMode ? "stars-badge-ok" : "stars-badge-info"}>{adminMode ? "Admin Mode" : "Navigation"}</span>
 					</div>
-					<div className="ml-auto hidden md:flex text-sm opacity-95 items-center gap-2 bg-white/10 px-4 py-2 rounded-full backdrop-blur-sm"><Info className="w-4 h-4" /> Smarter travel, safer roads</div>
-					<button onClick={() => setShowMessages((s) => !s)} aria-label={`Messages from admin${adminMessages.length > 0 ? ` (${adminMessages.length} unread)` : ''}`} className="ml-auto md:ml-4 flex items-center gap-2 text-sm px-3 sm:px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105">
+					<div className="ml-auto hidden lg:flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400"><Info className="w-3.5 h-3.5" /> Smarter travel, safer roads</div>
+					<button onClick={() => setShowMessages((s) => !s)} aria-label={`Messages from admin${adminMessages.length > 0 ? ` (${adminMessages.length} unread)` : ''}`} className="stars-btn-ghost relative" data-tip="Admin messages">
 						<Bell className="w-4 h-4" />
 						{adminMessages.length > 0 && <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-semibold animate-pulse">{adminMessages.length}</span>}
 					</button>
@@ -2930,7 +2985,7 @@ export default function App() {
 						}}
 						aria-expanded={adminMode}
 						aria-haspopup="dialog"
-						className={`ml-2 flex items-center gap-2 text-sm px-4 py-2 rounded-full transition-all duration-200 backdrop-blur-sm shadow-lg hover:shadow-xl hover:scale-105 ${adminMode ? 'bg-white/30 font-bold border-2 border-white/50' : 'bg-white/10 hover:bg-white/20 border border-white/30'}`}
+						className={`flex items-center gap-2 ${adminMode ? 'stars-btn-primary' : 'stars-btn-secondary'}`}
 					>
 						<ShieldCheck className="w-4 h-4" /> {adminMode ? 'Admin Mode' : 'Admin'}
 					</button>
@@ -3126,18 +3181,35 @@ export default function App() {
 			<main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
 				<section className="lg:col-span-2 space-y-6">
 					{/* Controls */}
-					<div ref={reportCardRef} className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
+					<div ref={reportCardRef} className="stars-card p-4 sm:p-6">
+						<div className="mb-4">
+							<h2 className="stars-h2">Plan your route</h2>
+							<p className="stars-caption mb-2">Origin → Destination → Analyze → Compare → Navigate</p>
+							<ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1" aria-label="Journey progress">
+								{journeySteps.map((s, i) => {
+									const isCurrent = !s.done && journeySteps.slice(0, i).every((p) => p.done);
+									return (
+										<li key={s.label} className="inline-flex items-center gap-1.5 text-[11px]">
+											{i > 0 && <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">→</span>}
+											<span aria-current={isCurrent ? 'step' : undefined} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${s.done ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : isCurrent ? 'bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+												<span aria-hidden="true">{s.done ? '✓' : '•'}</span> {s.label}
+											</span>
+										</li>
+									);
+								})}
+							</ol>
+						</div>
 						<div className="grid gap-4 md:grid-cols-2">
 							<div className="relative">
-								<label htmlFor="source-input" className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Source</label>
+								<label htmlFor="source-input" className="stars-label mb-2 block">Origin</label>
 								<input
 									id="source-input"
 									type="text"
 									ref={sourceInputRef}
 									value={sourceQuery}
 									onChange={(e) => { setSourceLocked(false); setSourceQuery(e.target.value); }}
-									placeholder="Search source location..."
-									className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 shadow-sm hover:shadow-md"
+									placeholder="Search origin location..."
+									className="stars-input px-4 py-3"
 								/>
 								<button
 									title="Use my location as source"
@@ -3170,7 +3242,7 @@ export default function App() {
 							</div>
 
 							<div className="relative">
-								<label htmlFor="destination-input" className="text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wide mb-2 block">Destination</label>
+								<label htmlFor="destination-input" className="stars-label mb-2 block">Destination</label>
 								<input
 									id="destination-input"
 									type="text"
@@ -3178,7 +3250,7 @@ export default function App() {
 									value={destQuery}
 									onChange={(e) => { setDestLocked(false); setDestQuery(e.target.value); }}
 									placeholder="Search destination location..."
-									className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 shadow-sm hover:shadow-md"
+									className="stars-input px-4 py-3"
 								/>
 								{destSuggestions.length > 0 && (
 									<ul className="absolute z-10 mt-1 max-h-48 w-full overflow-auto rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow">
@@ -3202,9 +3274,12 @@ export default function App() {
 								)}
 							</div>
 						</div>
-						<div className="mt-4 flex flex-wrap gap-3">
-							<button onClick={() => enableMapPick('source')} className={`px-4 py-2.5 text-sm font-medium rounded-xl border-2 transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 ${pickingMode === 'source' ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400'}`}>Pick source</button>
-							<button onClick={() => enableMapPick('destination')} className={`px-4 py-2.5 text-sm font-medium rounded-xl border-2 transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105 ${pickingMode === 'destination' ? 'border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-200' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400'}`}>Pick destination</button>
+						<div className="mt-4 flex flex-wrap gap-2 sm:gap-3">
+							<button type="button" onClick={swapEndpoints} className="stars-btn-secondary" data-tip="Swap origin and destination" aria-label="Swap origin and destination">
+								<ArrowLeftRight className="w-4 h-4" aria-hidden="true" /> Swap
+							</button>
+							<button onClick={() => enableMapPick('source')} aria-pressed={pickingMode === 'source'} className="stars-btn-secondary">Pick origin</button>
+							<button onClick={() => enableMapPick('destination')} aria-pressed={pickingMode === 'destination'} className="stars-btn-secondary">Pick destination</button>
 							<div className="relative">
 								<button
 									onClick={() => {
@@ -3271,39 +3346,29 @@ export default function App() {
 									<MapPin className="w-3.5 h-3.5" /> {stops.length}
 								</span>
 							)}
-							<button onClick={() => getRoutes()} disabled={!sourceCoord || !destCoord || routesLoading} aria-busy={routesLoading} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+							<button onClick={() => getRoutes()} disabled={!sourceCoord || !destCoord || routesLoading} aria-busy={routesLoading} className="stars-btn-primary px-6 py-2.5">
 								{routesLoading ? "Finding..." : "Find Routes"}
 							</button>
-							<button onClick={() => disableMapPick()} disabled={!pickingMode} className="px-4 py-2.5 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400 transition-all duration-200">Cancel pick</button>
+							<button onClick={() => disableMapPick()} disabled={!pickingMode} className="stars-btn-secondary">Cancel pick</button>
 							<button
 								onClick={() => {
-									// Clear everything including stops
-									setSourceCoord(null); setDestCoord(null); setStops([]);
-									setSourceQuery(""); setDestQuery(""); setSourceSuggestions([]); setDestSuggestions([]);
-									const map = window._mapInstance; if (map) {
-										try {
-											if (map.getLayer('route-primary')) map.removeLayer('route-primary');
-											if (map.getLayer('routes-alt')) map.removeLayer('routes-alt');
-											if (map.getSource('routes')) map.removeSource('routes');
-										} catch { /* mapbox can throw from internal terrain state on removal */ }
-										[sourceMarkerRef.current, destMarkerRef.current, ...stopMarkersRef.current].forEach((mk) => { if (mk) try { mk.remove(); } catch { } });
-									}
-									stopMarkersRef.current = [];
-									setRoutes([]); setSelectedRouteId(null);
-									Object.keys(weatherMarkersRef.current).forEach((k) => { (weatherMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); weatherMarkersRef.current[k] = []; });
-									setRouteWeather({}); setOpenWeatherId(null);
-									Object.keys(potholeMarkersRef.current).forEach((k) => { (potholeMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); potholeMarkersRef.current[k] = []; });
-									setPotholesByRoute({}); setOpenPotholeId(null); setCongestionSegments([]);
-								}}
-								className="px-4 py-2.5 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400 transition-all duration-200"
-							>
+								// Clear everything including stops
+								clearRouteResults();
+								setSourceCoord(null); setDestCoord(null); setStops([]);
+								setSourceQuery(""); setDestQuery(""); setSourceSuggestions([]); setDestSuggestions([]);
+								setSourceLocked(false); setDestLocked(false);
+							}}
+							className="stars-btn-secondary"
+						>
 								Clear all
 							</button>
-							{/* Map style toggles */}
+							{/* Map style switcher */}
 							<div className="ml-0 sm:ml-2 flex flex-wrap items-center gap-2">
-								<button onClick={() => switchMapStyle('streets')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'streets' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Streets</button>
-								<button onClick={() => switchMapStyle('satellite')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'satellite' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Satellite</button>
-								<button onClick={() => switchMapStyle('traffic')} className={`px-2 py-1 text-xs rounded border ${mapStyleMode === 'traffic' ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-900/30' : 'border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>Traffic</button>
+								<div className="stars-seg" role="group" aria-label="Map style">
+									<button onClick={() => switchMapStyle('streets')} aria-pressed={mapStyleMode === 'streets'} className="stars-seg-item">Streets</button>
+									<button onClick={() => switchMapStyle('satellite')} aria-pressed={mapStyleMode === 'satellite'} className="stars-seg-item">Satellite</button>
+									<button onClick={() => switchMapStyle('traffic')} aria-pressed={mapStyleMode === 'traffic'} className="stars-seg-item">Traffic</button>
+								</div>
 								{stops.length > 0 && (
 									<div className="mt-3 text-xs bg-gray-100 dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
 										<div className="font-medium mb-1">Stops ({stops.length})</div>
