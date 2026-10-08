@@ -1,5 +1,11 @@
 # STARS V3 — Architecture Baseline (Phase 1 Audit)
 
+> **Historical snapshot.** This document records the codebase as it was at
+> Phase 1, before the V3 upgrade — file counts, line numbers, and structure
+> below are intentionally point-in-time and do not reflect the current tree
+> (now organized into `src/features/` folders; see README §3 and §5).
+> Kept as the project's baseline audit record.
+
 Audit of the existing STARS application before beginning the V3 intelligence
 upgrade. No functional code was changed in this phase.
 
