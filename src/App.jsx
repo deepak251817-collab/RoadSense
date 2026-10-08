@@ -3722,6 +3722,47 @@ export default function App() {
 						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
 							<h2 className="text-base font-bold mb-4 text-gray-800 dark:text-gray-100 sticky top-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm z-10 px-1 py-1 rounded">Route Options</h2>
 
+							{/* Multi-route comparison: actual per-route analysis results */}
+							{routeAnalyses.length > 1 && (
+								<div className="mb-4 overflow-x-auto" role="region" aria-label="Route comparison">
+									<table className="w-full text-[11px] border-collapse whitespace-nowrap">
+										<caption className="sr-only">Comparison of travel time, distance, traffic, hazards, weather, incidents and safety across routes</caption>
+										<thead>
+											<tr className="text-left text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+												<th className="py-1 pr-2 font-semibold">Route</th>
+												<th className="py-1 px-2 font-semibold text-right">Time</th>
+												<th className="py-1 px-2 font-semibold text-right">Distance</th>
+												<th className="py-1 px-2 font-semibold">Traffic</th>
+												<th className="py-1 px-2 font-semibold text-right">Potholes</th>
+												<th className="py-1 px-2 font-semibold">Weather</th>
+												<th className="py-1 px-2 font-semibold text-right">Incidents</th>
+												<th className="py-1 pl-2 font-semibold text-right">Safety</th>
+											</tr>
+										</thead>
+										<tbody>
+											{routeAnalyses.map((a) => (
+												<tr key={a.index} className={`border-b border-gray-100 dark:border-gray-800 ${selectedRouteId === String(a.index) ? "bg-indigo-50/70 dark:bg-indigo-900/20" : ""}`}>
+													<td className="py-1 pr-2 font-semibold text-gray-800 dark:text-gray-100">
+														{a.label}
+														{recommendation && recommendation.recommendedIndex === a.index && (
+															<span className="ml-1 text-emerald-600 dark:text-emerald-400" title="Recommended">★<span className="sr-only"> (recommended)</span></span>
+														)}
+													</td>
+													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.durationMinutes} min</td>
+													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.distanceKm.toFixed(1)} km</td>
+													<td className="py-1 px-2 text-gray-600 dark:text-gray-400">{a.traffic.label}{a.traffic.available && a.traffic.estimated ? "*" : ""}</td>
+													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.potholes.count}{a.potholes.highCount > 0 ? ` (${a.potholes.highCount} hi)` : ""}</td>
+													<td className="py-1 px-2 text-gray-600 dark:text-gray-400">{a.weather.available ? a.weather.label : "—"}</td>
+													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.incidents.available ? a.incidents.count : "—"}</td>
+													<td className="py-1 pl-2 text-right font-bold" style={{ color: a.classification.color }}>{a.score}</td>
+												</tr>
+											))}
+										</tbody>
+									</table>
+									<div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">* estimated from route speeds · weather/incidents show — when no source is wired</div>
+								</div>
+							)}
+
 							{routes.length > 1 && recommendation && recChoice === null && routeAnalyses[recommendation.recommendedIndex] && (
 								<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Recommended safer route">
 									<div className="flex items-center justify-between gap-2">
