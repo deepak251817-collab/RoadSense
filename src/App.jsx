@@ -144,6 +144,8 @@ export default function App() {
 		let alive = true;
 		fetchExternalIncidents(import.meta.env.VITE_INCIDENTS_URL).then((res) => {
 			if (alive) setExternalIncidents(res);
+		}).catch(() => {
+			if (alive) setExternalIncidents({ available: false, items: [], error: null });
 		});
 		return () => { alive = false; };
 	}, []);
@@ -664,7 +666,7 @@ export default function App() {
 			const coord = [pos.coords.longitude, pos.coords.latitude];
 			setUserCoord(coord);
 			setSourceCoord(coord);
-			reverseGeocode(coord[0], coord[1]).then((name) => { setSourceQuery(name || formatCoordLabel(coord[0], coord[1])); setSourceSuggestions([]); setSourceLocked(true); });
+			reverseGeocode(coord[0], coord[1]).catch(() => null).then((name) => { setSourceQuery(name || formatCoordLabel(coord[0], coord[1])); setSourceSuggestions([]); setSourceLocked(true); });
 			const map = window._mapInstance; if (map) map.flyTo({ center: coord, zoom: 13 });
 			setTimeout(() => getRoutes(), 0);
 		} catch (err) {
@@ -751,7 +753,7 @@ export default function App() {
 			return;
 		}
 		srcTimer.current = setTimeout(() => {
-			geocode(sourceQuery).then(setSourceSuggestions);
+			geocode(sourceQuery).catch(() => []).then(setSourceSuggestions);
 		}, 300);
 		return () => srcTimer.current && clearTimeout(srcTimer.current);
 	}, [sourceQuery, sourceLocked]);
@@ -763,7 +765,7 @@ export default function App() {
 			return;
 		}
 		dstTimer.current = setTimeout(() => {
-			geocode(destQuery).then(setDestSuggestions);
+			geocode(destQuery).catch(() => []).then(setDestSuggestions);
 		}, 300);
 		return () => dstTimer.current && clearTimeout(dstTimer.current);
 	}, [destQuery, destLocked]);
@@ -777,7 +779,7 @@ export default function App() {
 			return;
 		}
 		stopTimer.current = setTimeout(() => {
-			geocode(stopSearchQuery).then(setStopSearchSuggestions);
+			geocode(stopSearchQuery).catch(() => []).then(setStopSearchSuggestions);
 		}, 300);
 		return () => stopTimer.current && clearTimeout(stopTimer.current);
 	}, [stopSearchOpen, stopSearchQuery]);
@@ -1435,7 +1437,7 @@ export default function App() {
 			if (mode === "source") {
 				const coord = [lngLat.lng, lngLat.lat];
 				setSourceCoord(coord);
-				reverseGeocode(coord[0], coord[1]).then((name) => {
+				reverseGeocode(coord[0], coord[1]).catch(() => null).then((name) => {
 					setSourceQuery(name || formatCoordLabel(coord[0], coord[1]));
 					setSourceSuggestions([]);
 					setSourceLocked(true);
@@ -1443,7 +1445,7 @@ export default function App() {
 			} else if (mode === "destination") {
 				const coord = [lngLat.lng, lngLat.lat];
 				setDestCoord(coord);
-				reverseGeocode(coord[0], coord[1]).then((name) => {
+				reverseGeocode(coord[0], coord[1]).catch(() => null).then((name) => {
 					setDestQuery(name || formatCoordLabel(coord[0], coord[1]));
 					setDestSuggestions([]);
 					setDestLocked(true);
@@ -2503,7 +2505,7 @@ export default function App() {
 			if (Notification.permission === 'granted') {
 				trigger();
 			} else if (Notification.permission === 'default') {
-				Notification.requestPermission().then((perm) => { if (perm === 'granted') trigger(); });
+				Notification.requestPermission().then((perm) => { if (perm === 'granted') trigger(); }).catch(() => {});
 			}
 		} catch { }
 	};
@@ -2819,7 +2821,7 @@ export default function App() {
 				setUserCoord(coord);
 				setSourceCoord(coord); // per requirement: use my location sets source
 				// Update input text with reverse geocoded name, fallback to coordinates label
-				reverseGeocode(coord[0], coord[1]).then((name) => {
+				reverseGeocode(coord[0], coord[1]).catch(() => null).then((name) => {
 					setSourceQuery(name || formatCoordLabel(coord[0], coord[1]));
 					setSourceSuggestions([]);
 					// Lock autocomplete so it doesn't appear unless user types
