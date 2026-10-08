@@ -1,6 +1,14 @@
 import React from "react";
 import { FlaskConical } from "lucide-react";
-import { WHAT_IF_LABEL, WHAT_IF_MODES } from "./whatIf";
+import {
+  WHAT_IF_LABEL,
+  WHAT_IF_MODES,
+  WHAT_IF_TRAFFIC_STEPS,
+  WHAT_IF_RAIN_LEVELS,
+  WHAT_IF_VISIBILITY_LEVELS,
+  normalizeWhatIfAdjustments,
+  hasWhatIfAdjustments,
+} from "./whatIf";
 
 /**
  * What-if simulation panel: pick a repair scenario and see the before /
@@ -15,11 +23,29 @@ import { WHAT_IF_LABEL, WHAT_IF_MODES } from "./whatIf";
  * @param {Object|null} props.result output of runWhatIf()
  * @param {string} props.mode current selection mode
  * @param {Function} props.onModeChange mode key => void
+ * @param {Object} [props.adjustments] simulated conditions {trafficPct, rain, visibility}
+ * @param {Function} [props.onAdjustmentsChange] adjustments => void
  * @param {Function} props.onClose hide the panel
  */
-export default function WhatIfPanel({ show, result, mode, onModeChange, onClose }) {
+export default function WhatIfPanel({
+  show,
+  result,
+  mode,
+  onModeChange,
+  adjustments = null,
+  onAdjustmentsChange = null,
+  onClose,
+}) {
   if (!show || !result) return null;
-  const { baseline, simulated, delta, matchedCount, remainingActive, reasons } = result;
+  const { baseline, simulated, delta, matchedCount, remainingActive, reasons, adjustmentReasons } = result;
+  const adj = normalizeWhatIfAdjustments(adjustments);
+  const setAdj = (patch) => onAdjustmentsChange && onAdjustmentsChange({ ...adj, ...patch });
+  const adjChip = (active) =>
+    `px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
+      active
+        ? "border-fuchsia-600 bg-fuchsia-600 text-white font-bold"
+        : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-800"
+    }`;
 
   const rows = [];
   if (baseline.route) {
@@ -82,6 +108,78 @@ export default function WhatIfPanel({ show, result, mode, onModeChange, onClose 
             {m.label}
           </button>
         ))}
+      </div>
+
+      {/* Simulated conditions: traffic / rain / visibility */}
+      <div
+        className="mb-3 rounded-xl border border-fuchsia-200 dark:border-fuchsia-700 bg-white/60 dark:bg-gray-900/50 p-2.5"
+        role="group"
+        aria-label="Simulated conditions"
+      >
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] font-bold text-fuchsia-800 dark:text-fuchsia-200 uppercase tracking-wide">
+            Simulated conditions
+          </span>
+          {hasWhatIfAdjustments(adj) && (
+            <button
+              onClick={() => onAdjustmentsChange && onAdjustmentsChange(normalizeWhatIfAdjustments())}
+              className="text-[10px] text-fuchsia-700 dark:text-fuchsia-300 underline"
+            >
+              Reset to observed
+            </button>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] mb-1">
+          <span className="w-14 shrink-0 font-semibold text-gray-600 dark:text-gray-300">Traffic</span>
+          {WHAT_IF_TRAFFIC_STEPS.map((pct) => (
+            <button
+              key={pct}
+              onClick={() => setAdj({ trafficPct: pct })}
+              aria-pressed={adj.trafficPct === pct}
+              className={adjChip(adj.trafficPct === pct)}
+            >
+              {pct === 0 ? "Normal" : `+${pct}%`}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px] mb-1">
+          <span className="w-14 shrink-0 font-semibold text-gray-600 dark:text-gray-300">Rain</span>
+          {WHAT_IF_RAIN_LEVELS.map((r) => (
+            <button
+              key={r.key}
+              onClick={() => setAdj({ rain: r.key })}
+              aria-pressed={adj.rain === r.key}
+              className={adjChip(adj.rain === r.key)}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="w-14 shrink-0 font-semibold text-gray-600 dark:text-gray-300">Visibility</span>
+          {WHAT_IF_VISIBILITY_LEVELS.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setAdj({ visibility: v.key })}
+              aria-pressed={adj.visibility === v.key}
+              className={adjChip(adj.visibility === v.key)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+        {adjustmentReasons && adjustmentReasons.length > 0 && (
+          <ul className="mt-1.5 space-y-0.5">
+            {adjustmentReasons.map((r) => (
+              <li key={r} className="text-[10px] text-gray-600 dark:text-gray-300">
+                {r}
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="mt-1.5 text-[9px] font-bold uppercase tracking-wide text-fuchsia-700 dark:text-fuchsia-300">
+          Simulation — not live conditions
+        </div>
       </div>
 
       {/* Before → after */}

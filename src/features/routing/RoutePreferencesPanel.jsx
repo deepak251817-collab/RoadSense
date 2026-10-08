@@ -3,6 +3,7 @@ import { SlidersHorizontal } from "lucide-react";
 import {
   ROUTE_PRIORITIES,
   ROUTE_PREFERENCES_LABEL,
+  ROUTE_AVOIDANCES,
   buildExcludeParam,
   describeRoutePreferences,
 } from "./routePreferences";
@@ -53,8 +54,10 @@ export default function RoutePreferencesPanel({ show, preferences, onChange, onC
       </div>
       <div className="mb-3 text-[11px] text-blue-700 dark:text-blue-300">
         Priority tunes how much extra travel time a safety gain may cost when recommending among the
-        routes Mapbox returns. Avoidance toggles are passed to the routing engine as real
-        exclusions, with a fallback to normal routing if the engine cannot honor them.
+        routes Mapbox returns. "Avoid unpaved/tolls" are passed to the routing engine as real
+        exclusions (with a fallback if the engine cannot honor them); the recommendation-level
+        toggles below only decide which returned alternative may be recommended — the roads
+        themselves never change.
       </div>
 
       {/* Priority picker */}
@@ -96,6 +99,34 @@ export default function RoutePreferencesPanel({ show, preferences, onChange, onC
           />
           Avoid tolls
         </label>
+      </div>
+
+      {/* Recommendation-level avoidance (never hides alternatives) */}
+      <div className="mb-2">
+        <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+          Avoid — recommendation level
+        </div>
+        <div className="flex flex-wrap gap-3 text-[11px]">
+          {ROUTE_AVOIDANCES.map((a) => (
+            <label
+              key={a.key}
+              title={a.hint}
+              className="inline-flex items-center gap-1.5 cursor-pointer text-gray-700 dark:text-gray-200"
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(preferences[a.key])}
+                onChange={(e) => set({ [a.key]: e.target.checked })}
+                className="w-3.5 h-3.5 rounded"
+              />
+              {a.label}
+            </label>
+          ))}
+        </div>
+        <div className="mt-1 text-[9px] text-gray-500 dark:text-gray-400">
+          Restricts which returned alternative may be recommended. All alternatives stay visible,
+          and if every route matches an avoidance rule the recommendation falls back to all of them.
+        </div>
       </div>
 
       <div className="text-[11px] text-blue-700 dark:text-blue-300">

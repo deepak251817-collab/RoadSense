@@ -35,11 +35,28 @@ export const ROUTE_PRIORITIES = [
   { key: "fastest", label: "Time First" },
 ];
 
+/**
+ * Recommendation-level avoidance toggles. Mapbox `exclude` cannot express
+ * these (it only knows toll/ferry/unpaved), so they filter which of the
+ * ALREADY RETURNED alternatives may be recommended — the roads Mapbox
+ * routes you on never change, and all alternatives stay visible.
+ */
+export const ROUTE_AVOIDANCES = [
+  { key: "avoidHighRiskRoutes", label: "High-risk routes", hint: "don't recommend routes classified Risky / High Risk" },
+  { key: "avoidSevereHazards", label: "Severe hazards", hint: "don't recommend routes with active high-severity hazards alongside" },
+  { key: "avoidWaterlogging", label: "Waterlogged areas", hint: "don't recommend routes with active waterlogging reports alongside" },
+  { key: "avoidIncidents", label: "Reported incidents", hint: "don't recommend routes with incidents alongside (when a feed is connected)" },
+];
+
 /** Default preference state. */
 export const DEFAULT_ROUTE_PREFERENCES = {
   priority: "balanced",
   avoidUnpaved: false,
   avoidTolls: false,
+  avoidHighRiskRoutes: false,
+  avoidSevereHazards: false,
+  avoidWaterlogging: false,
+  avoidIncidents: false,
 };
 
 /**
@@ -84,7 +101,40 @@ export function normalizeRoutePreferences(raw) {
     priority: isValidPriority(src.priority) ? src.priority : DEFAULT_ROUTE_PREFERENCES.priority,
     avoidUnpaved: Boolean(src.avoidUnpaved),
     avoidTolls: Boolean(src.avoidTolls),
+    avoidHighRiskRoutes: Boolean(src.avoidHighRiskRoutes),
+    avoidSevereHazards: Boolean(src.avoidSevereHazards),
+    avoidWaterlogging: Boolean(src.avoidWaterlogging),
+    avoidIncidents: Boolean(src.avoidIncidents),
   };
+}
+
+/** Safety band keys that count as "high risk" for avoidance. */
+export const HIGH_RISK_BAND_KEYS = ["risky", "high-risk"];
+
+/**
+ * Apply the avoidance toggles to analyzed routes. Pure and conservative:
+ *
+ * - Each enabled toggle drops routes that match its rule.
+ * - If the filters would drop EVERY alternative, nothing is dropped —
+ *   avoidance must never leave the user with no recommendation.
+ *
+ * @param {Array} analyses analyzed routes (analyzeRoutes output)
+ * @param {Object} prefs normalized preferences
+ * @returns {{list:Array, dropped:number, allDropped:boolean}}
+ */
+export function applyAvoidPreferences(analyses, prefs = {}) {
+  const list = Array.isArray(analyses) ? analyses.filter(Boolean) : [];
+  if (!list.length) return { list, dropped: 0, allDropped: false };
+  const keep = list.filter((a) => {
+    if (prefs.avoidHighRiskRoutes && HIGH_RISK_BAND_KEYS.includes(a.classification?.key)) return false;
+    if (prefs.avoidSevereHazards && (a.potholes?.highCount || 0) > 0) return false;
+    if (prefs.avoidWaterlogging && (a.waterlogging?.count || 0) > 0) return false;
+    if (prefs.avoidIncidents && a.incidents?.available && (a.incidents?.count || 0) > 0) return false;
+    return true;
+  });
+  const dropped = list.length - keep.length;
+  if (!keep.length) return { list, dropped, allDropped: true };
+  return { list: keep, dropped, allDropped: false };
 }
 
 /** Load preferences from storage (corruption-tolerant). */

@@ -37,7 +37,7 @@ export function labelForRisk(risk) {
  * @returns {{items:Array, count:number, highCount:number, fixedCount:number}}
  */
 export function collectRouteReports(route, reports, { showFixed, adminMode } = {}, thresholdMeters = 120) {
-  const empty = { items: [], count: 0, highCount: 0, fixedCount: 0, activePotholeCount: 0, activePotholeHigh: 0, activeConditionCount: 0, activeConditionHigh: 0 };
+  const empty = { items: [], count: 0, highCount: 0, fixedCount: 0, activePotholeCount: 0, activePotholeHigh: 0, activeConditionCount: 0, activeConditionHigh: 0, activeWaterloggingCount: 0 };
   const coords = route?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(reports)) return empty;
   const items = [];
@@ -47,6 +47,7 @@ export function collectRouteReports(route, reports, { showFixed, adminMode } = {
   let activeHighCount = 0;
   const pothole = { count: 0, high: 0 };
   const condition = { count: 0, high: 0 };
+  let waterlogging = 0;
   for (const rep of reports) {
     if (!isValidCoord(rep?.coord)) continue;
     if (rep.hiddenGlobally) continue;
@@ -63,6 +64,7 @@ export function collectRouteReports(route, reports, { showFixed, adminMode } = {
         // Fixed hazards no longer count against route safety scoring
         activeCount += 1;
         if (rep.severity === "high") activeHighCount += 1;
+        if (rep.type === "waterlogging") waterlogging += 1;
         // Pothole surface reports score as pothole risk; every other
         // condition type (broken road, debris, closures, …) scores as
         // road-condition risk.
@@ -76,6 +78,7 @@ export function collectRouteReports(route, reports, { showFixed, adminMode } = {
     items, count: items.length, highCount, fixedCount, activeCount, activeHighCount,
     activePotholeCount: pothole.count, activePotholeHigh: pothole.high,
     activeConditionCount: condition.count, activeConditionHigh: condition.high,
+    activeWaterloggingCount: waterlogging,
   };
 }
 
@@ -213,6 +216,7 @@ export function analyzeRoute(route, index, ctx = {}) {
       label: labelForRisk(traffic.risk),
     },
     potholes: { count: near.count, highCount: near.highCount, fixedCount: near.fixedCount },
+    waterlogging: { count: near.activeWaterloggingCount },
     weather,
     incidents: {
       available: incidentsAvailable,

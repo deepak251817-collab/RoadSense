@@ -71,12 +71,13 @@ import { rankRepairs } from "./features/admin/repairPriority";
 import MunicipalDashboard from "./features/admin/MunicipalDashboard";
 import { summarizeMunicipal, applyReportFilters, locationOptions } from "./features/admin/municipalSummary";
 import WhatIfPanel from "./features/routing/WhatIfPanel";
-import { runWhatIf } from "./features/routing/whatIf";
+import { runWhatIf, normalizeWhatIfAdjustments } from "./features/routing/whatIf";
 import RoutePreferencesPanel from "./features/routing/RoutePreferencesPanel";
 import {
   ROUTE_PREFERENCES_LABEL,
   recommendationConfigFor,
   buildExcludeParam,
+  applyAvoidPreferences,
   loadRoutePreferences,
   saveRoutePreferences,
 } from "./features/routing/routePreferences";
@@ -1080,10 +1081,16 @@ export default function App() {
 	}, [serviceMapItems]);
 
 	// Safety-aware recommendation (travel-time tolerant) over the analyzed routes;
-	// the user's priority preference tunes the recommendation policy.
+	// the user's priority preference tunes the recommendation policy, and the
+	// avoidance toggles restrict which alternatives may be recommended
+	// (never hiding them — and never dropping every alternative).
+	const routeAvoidance = useMemo(
+		() => applyAvoidPreferences(routeAnalyses, routePreferences),
+		[routeAnalyses, routePreferences]
+	);
 	const recommendation = useMemo(
-		() => recommendRoute(routeAnalyses, recommendationConfigFor(routePreferences.priority)),
-		[routeAnalyses, routePreferences.priority]
+		() => recommendRoute(routeAvoidance.list, recommendationConfigFor(routePreferences.priority)),
+		[routeAvoidance.list, routePreferences.priority]
 	);
 
 	// Data-driven explanations for the recommendation (only real metric differences)
@@ -1214,6 +1221,7 @@ export default function App() {
 	// ---- What-if simulation (scenario; utils/whatIf) ----
 	const [showWhatIf, setShowWhatIf] = useState(false);
 	const [whatIfMode, setWhatIfMode] = useState("all");
+	const [whatIfAdjustments, setWhatIfAdjustments] = useState(() => normalizeWhatIfAdjustments());
 	const whatIf = useMemo(() => {
 		if (!routes?.length) return null;
 		const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
@@ -1224,8 +1232,9 @@ export default function App() {
 			route,
 			baselineFactorRisks: routeAnalyses[idx]?.factorRisks || null,
 			mode: whatIfMode,
+			adjustments: whatIfAdjustments,
 		});
-	}, [routes, selectedRouteId, routeAnalyses, userReports, whatIfMode]);
+	}, [routes, selectedRouteId, routeAnalyses, userReports, whatIfMode, whatIfAdjustments]);
 
 	// ---- Municipal dashboard (admin-only; utils/municipalSummary) ----
 	const [showMunicipal, setShowMunicipal] = useState(false);
@@ -3551,6 +3560,8 @@ export default function App() {
 						result={whatIf}
 						mode={whatIfMode}
 						onModeChange={setWhatIfMode}
+						adjustments={whatIfAdjustments}
+						onAdjustmentsChange={setWhatIfAdjustments}
 						onClose={() => setShowWhatIf(false)}
 					/>
 					{/* Repair priority ranking */}
