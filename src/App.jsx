@@ -113,6 +113,7 @@ export default function App() {
 	const destInputRef = useRef(null);
 	const reportCardRef = useRef(null);
 	const [mapError, setMapError] = useState(null);
+	const [routesLoading, setRoutesLoading] = useState(false); // route search in flight (drives button busy state + SR announcement)
 	const tokenPresent = Boolean(import.meta.env.VITE_MAPBOX_TOKEN);
 
 	// Source/Destination state
@@ -745,6 +746,14 @@ export default function App() {
 		setTimeout(() => { try { map.resize(); } catch {} }, 50);
 	}, [fullMap]);
 
+	// Responsive: re-sync the map canvas when the viewport resizes (rotation,
+	// window resize, device-mode switch) so it never renders at a stale size
+	useEffect(() => {
+		const onResize = () => { try { window._mapInstance?.resize(); } catch { } };
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	}, []);
+
 	// Autocomplete effects
 	useEffect(() => {
 		if (srcTimer.current) clearTimeout(srcTimer.current);
@@ -1361,6 +1370,7 @@ export default function App() {
 	const getRoutes = async () => {
 		const map = window._mapInstance;
 		if (!map || !sourceCoord || !destCoord) return;
+		setRoutesLoading(true);
 		try {
 			const profile = "driving"; // could be walking, cycling, driving-traffic
 			const coordsList = [sourceCoord, ...stops, destCoord]
@@ -1421,6 +1431,8 @@ export default function App() {
 			routesData.forEach((_, i) => { try { fetchTrafficForRoute(i); } catch { } });
 		} catch (e) {
 			setMapError(e.message || "Failed to fetch routes");
+		} finally {
+			setRoutesLoading(false);
 		}
 	};
 
@@ -1474,6 +1486,25 @@ export default function App() {
 		}
 		setPickingMode(null);
 	};
+
+	// Accessibility: Escape closes the topmost dialog/popover, or cancels map picking
+	useEffect(() => {
+		const onKey = (e) => {
+			if (e.key !== "Escape") return;
+			if (imageModal.open) setImageModal({ open: false, src: null, caption: "" });
+			else if (cameraOpen) setCameraOpen(false);
+			else if (rejectModal.open) setRejectModal({ open: false, reportId: null });
+			else if (fixModal.open) setFixModal({ open: false, reportId: null });
+			else if (adminPinOpen) setAdminPinOpen(false);
+			else if (showMessages) setShowMessages(false);
+			else if (layersMenuOpen) setLayersMenuOpen(false);
+			else if (showRoutePrefs) setShowRoutePrefs(false);
+			else if (fullMap) setFullMap(false);
+			else if (pickingMode) disableMapPick();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
 
 	// Weather helpers
 	const OW_KEY = import.meta.env.VITE_OPENWEATHER_KEY;
@@ -2892,7 +2923,7 @@ export default function App() {
 
 			{/* Notice banner */}
 			{notice && (
-				<div className="max-w-7xl mx-auto px-6 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
+				<div role="status" className="max-w-7xl mx-auto px-6 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
 					<div className={`px-4 py-3 text-sm rounded-xl shadow-lg backdrop-blur-sm flex items-center justify-between ${notice.type === 'success' ? 'bg-green-100/90 border-2 border-green-300 text-green-900 dark:bg-green-900/40 dark:border-green-700 dark:text-green-200' : notice.type === 'warn' ? 'bg-yellow-100/90 border-2 border-yellow-300 text-yellow-900 dark:bg-yellow-900/40 dark:border-yellow-700 dark:text-yellow-200' : notice.type === 'error' ? 'bg-red-100/90 border-2 border-red-300 text-red-900 dark:bg-red-900/40 dark:border-red-700 dark:text-red-200' : 'bg-blue-100/90 border-2 border-blue-300 text-blue-900 dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-200'}`}>
 						<span>{notice.message}</span>
 					{notice.undoId && (
@@ -3224,8 +3255,8 @@ export default function App() {
 									<MapPin className="w-3.5 h-3.5" /> {stops.length}
 								</span>
 							)}
-							<button onClick={() => getRoutes()} disabled={!sourceCoord || !destCoord} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
-								Find Routes
+							<button onClick={() => getRoutes()} disabled={!sourceCoord || !destCoord || routesLoading} aria-busy={routesLoading} className="px-6 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+								{routesLoading ? "Finding..." : "Find Routes"}
 							</button>
 							<button onClick={() => disableMapPick()} disabled={!pickingMode} className="px-4 py-2.5 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-400 transition-all duration-200">Cancel pick</button>
 							<button
@@ -3669,8 +3700,12 @@ export default function App() {
 							</div>
 						)}
 					</div>
+					{/* Screen-reader announcements for route search progress/results */}
+					<div className="sr-only" role="status" aria-live="polite">
+						{routesLoading ? "Finding routes..." : routes.length ? `${routes.length} route${routes.length === 1 ? "" : "s"} found` : ""}
+					</div>
 					{mapError && (
-						<div className="px-3 py-2 text-sm rounded bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
+						<div role="alert" className="px-3 py-2 text-sm rounded bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300">
 							{mapError}
 						</div>
 					)}
