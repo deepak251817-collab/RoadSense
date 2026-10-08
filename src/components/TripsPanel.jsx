@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 
 /**
  * Trip history panel with aggregate stats. Pure presentational.
@@ -10,7 +10,7 @@ import React from "react";
  * @param {Function} props.onClear clear history
  * @param {Function} props.onClose hide the panel
  */
-export default function TripsPanel({ show, trips = [], stats, onClear, onClose }) {
+function TripsPanel({ show, trips = [], stats, onClear, onClose }) {
   if (!show) return null;
   return (
     <div
@@ -149,3 +149,5 @@ function Metric({ label, value, wide = false }) {
     </div>
   );
 }
+
+export default memo(TripsPanel);

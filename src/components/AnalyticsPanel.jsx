@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { STATUS_STYLES } from "../utils/hazardLifecycle";
 import { ANALYTICS_CONFIG } from "../utils/analytics";
@@ -13,7 +13,7 @@ import { ANALYTICS_CONFIG } from "../utils/analytics";
  * @param {Object} props.analytics snapshot from computeSafetyAnalytics()
  * @param {Function} props.onClose hide the panel
  */
-export default function AnalyticsPanel({ show, analytics, onClose }) {
+function AnalyticsPanel({ show, analytics, onClose }) {
   if (!show || !analytics) return null;
   const { hazards, lifecycle, trend, trips } = analytics;
   return (
@@ -129,3 +129,5 @@ export default function AnalyticsPanel({ show, analytics, onClose }) {
     </div>
   );
 }
+
+export default memo(AnalyticsPanel);

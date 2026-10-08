@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createTrip,
   endTrip,
@@ -47,13 +47,15 @@ export default function useTripHistory({
   const weatherRef = useRef(weatherLabel);
   weatherRef.current = weatherLabel;
 
-  const persistTrips = (updater) => {
+  // Stable identity: only touches the (stable) setter and module imports,
+  // so consumers can memoize on it.
+  const persistTrips = useCallback((updater) => {
     setTripHistory((prev) => {
       const next = updater(prev);
       saveTripHistory(next);
       return next;
     });
-  };
+  }, []);
 
   // Load persisted history once on mount
   useEffect(() => {

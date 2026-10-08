@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import lowIcon from "./assets/potholes/low.svg";
 import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
@@ -50,8 +50,7 @@ import { fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
 import HazardAlertStack from "./components/HazardAlertStack";
 import HotspotsPanel from "./components/HotspotsPanel";
 import TripsPanel from "./components/TripsPanel";
-import AnalyticsPanel from "./components/AnalyticsPanel";
-import PredictiveSafetyPanel from "./components/PredictiveSafetyPanel";
+
 import SegmentRiskStrip from "./components/SegmentRiskStrip";
 import WaterloggingPanel from "./components/WaterloggingPanel";
 import { assessWaterloggingRisk } from "./utils/waterlogging";
@@ -95,15 +94,11 @@ import {
   pickNextStepAnnouncement,
 } from "./services/voiceNavigation";
 import { distMeters } from "./utils/geo";
-import {
-	LineChart,
-	Line,
-	XAxis,
-	YAxis,
-	Tooltip,
-	ResponsiveContainer,
-	CartesianGrid,
-} from "recharts";
+// Chart-heavy UI is lazy-loaded so recharts stays out of the initial bundle
+// (t27.mjs asserts the charts chunk is absent from dist/index.html).
+const AnalyticsPanel = React.lazy(() => import("./components/AnalyticsPanel"));
+const PredictiveSafetyPanel = React.lazy(() => import("./components/PredictiveSafetyPanel"));
+const TrafficChart = React.lazy(() => import("./components/TrafficChart"));
 
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
@@ -1115,6 +1110,12 @@ export default function App() {
 		() => computeSafetyAnalytics({ reports: userReports, trips: tripHistory }),
 		[userReports, tripHistory]
 	);
+
+	// Stable handlers so memoized panels skip re-renders on unrelated state changes (P27)
+	const closeTrips = useCallback(() => setShowTrips(false), []);
+	const clearTrips = useCallback(() => persistTrips(() => []), [persistTrips]);
+	const closeAnalytics = useCallback(() => setShowAnalytics(false), []);
+	const closePredictive = useCallback(() => setShowPredictive(false), []);
 
 	// ---- Predictive safety (rule-based estimate; see utils/prediction) ----
 	const [showPredictive, setShowPredictive] = useState(false);
@@ -3450,13 +3451,21 @@ export default function App() {
 						show={showTrips}
 						trips={tripHistory}
 						stats={tripStats}
-						onClear={() => persistTrips(() => [])}
-						onClose={() => setShowTrips(false)}
+						onClear={clearTrips}
+						onClose={closeTrips}
 					/>
-					{/* Safety analytics */}
-					<AnalyticsPanel show={showAnalytics} analytics={safetyAnalytics} onClose={() => setShowAnalytics(false)} />
-					{/* Predictive safety (rule-based estimate) */}
-					<PredictiveSafetyPanel show={showPredictive} prediction={predictive} onClose={() => setShowPredictive(false)} />
+					{/* Safety analytics (lazy: keeps recharts out of the initial bundle) */}
+					{showAnalytics && (
+						<Suspense fallback={null}>
+							<AnalyticsPanel show={showAnalytics} analytics={safetyAnalytics} onClose={closeAnalytics} />
+						</Suspense>
+					)}
+					{/* Predictive safety (rule-based estimate; lazy-loaded) */}
+					{showPredictive && (
+						<Suspense fallback={null}>
+							<PredictiveSafetyPanel show={showPredictive} prediction={predictive} onClose={closePredictive} />
+						</Suspense>
+					)}
 					{/* Segment-level road risk (per-segment score, hazards, weather) */}
 					<SegmentRiskStrip show={showSegments} segments={routeSegments} onClose={() => setShowSegments(false)} />
 					{/* Waterlogging / flood risk (rule-based estimate) */}
@@ -3944,20 +3953,9 @@ export default function App() {
 															<div className="text-[11px] text-gray-700 dark:text-gray-300 mb-1">
 																Live: {Math.round(trafficByRoute[idx].liveMinutes)} min · Free-flow: {Math.round(trafficByRoute[idx].freeMinutes)} min · Δ {Math.round(((trafficByRoute[idx].liveMinutes / Math.max(1, trafficByRoute[idx].freeMinutes)) - 1) * 100)}%
 															</div>
-															<div style={{ height: 160 }}>
-																<ResponsiveContainer width="100%" height="100%">
-																	<LineChart data={trafficByRoute[idx].points} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-																		<CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-																		<XAxis dataKey="idx" tick={{ fontSize: 10 }} label={{ value: "Step", position: "insideBottom", dy: 0, fontSize: 10 }} />
-																		<YAxis yAxisId="speed" tick={{ fontSize: 10 }} label={{ value: "km/h", angle: -90, position: "insideLeft", fontSize: 10 }} />
-																		<YAxis yAxisId="delay" orientation="right" tick={{ fontSize: 10 }} label={{ value: "Delay %", angle: -90, position: "insideRight", fontSize: 10 }} />
-																		<Tooltip />
-																		<Line yAxisId="speed" type="monotone" dataKey="speedLive" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} name="Live speed" />
-																		<Line yAxisId="speed" type="monotone" dataKey="speedFree" stroke="#16a34a" strokeWidth={2} dot={{ r: 2 }} name="Free-flow speed" />
-																		<Line yAxisId="delay" type="monotone" dataKey="delayPct" stroke="#dc2626" strokeWidth={2} dot={{ r: 2 }} name="Delay %" />
-																	</LineChart>
-																</ResponsiveContainer>
-															</div>
+											<Suspense fallback={<div className="h-40 rounded bg-gray-100 dark:bg-gray-800 animate-pulse" />}>
+												<TrafficChart points={trafficByRoute[idx].points} />
+											</Suspense>
 														</div>
 													)}
 													{!trafficByRoute[idx]?.loading && !trafficByRoute[idx]?.points?.length && !trafficByRoute[idx]?.error && computeTrafficData(r).length > 0 && (

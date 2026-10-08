@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { memo, useState } from "react";
 import {
   LineChart,
   Line,
@@ -25,7 +25,7 @@ import ExplanationCard from "./ExplanationCard";
  * @param {{current:Object, horizons:Array}|null} props.prediction engine output
  * @param {Function} props.onClose hide the panel
  */
-export default function PredictiveSafetyPanel({ show, prediction, onClose }) {
+function PredictiveSafetyPanel({ show, prediction, onClose }) {
   // Hook must run unconditionally — keep it above the early return.
   const [showExplanation, setShowExplanation] = useState(false);
 
@@ -198,3 +198,5 @@ export default function PredictiveSafetyPanel({ show, prediction, onClose }) {
     </div>
   );
 }
+
+export default memo(PredictiveSafetyPanel);
