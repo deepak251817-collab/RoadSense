@@ -2315,8 +2315,8 @@ export default function App() {
 				const meta = document.createElement("div");
 				meta.style.marginTop = "6px";
 				const displayedTs = rep.captureAt || rep.createdAt;
-				const createdAt = new Date(displayedTs).toLocaleString();					const sev = String(rep.severity || "").toUpperCase();
-					const typeLabel = hazardTypeMeta(rep.type).label;
+				const createdAt = new Date(displayedTs).toLocaleString();				const sev = escapePopupHtml(String(rep.severity || "").toUpperCase());
+				const typeLabel = escapePopupHtml(hazardTypeMeta(rep.type).label);
 				const lng = Array.isArray(rep.coord) ? Number(rep.coord[0]) : NaN;
 				const lat = Array.isArray(rep.coord) ? Number(rep.coord[1]) : NaN;
 				const coordLine = (isFinite(lat) && isFinite(lng)) ? `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}` : "";
