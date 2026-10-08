@@ -12,25 +12,25 @@ const t = (name, fn) => {
 const item = (label) => ({ label, checked: true, onChange: () => {} });
 
 t("canonical order covers the four groups", () => {
-  assert.deepEqual(CONTROL_GROUP_ORDER, ["Navigation", "Safety", "Hazards", "Analytics"]);
+  assert.deepEqual(CONTROL_GROUP_ORDER, ["Navigation", "Safety", "Hazards", "Environment"]);
 });
 
 t("shuffled groups are sorted into canonical order", () => {
   const out = normalizeControlGroups([
-    { title: "Analytics", items: [item("Safety heatmap")] },
+    { title: "Environment", items: [item("Weather forecasts")] },
     { title: "Hazards", items: [item("Incidents")] },
     { title: "Navigation", items: [item("Live routing")] },
     { title: "Safety", items: [item("Road Risk")] },
   ]);
-  assert.deepEqual(out.map((g) => g.title), ["Navigation", "Safety", "Hazards", "Analytics"]);
+  assert.deepEqual(out.map((g) => g.title), ["Navigation", "Safety", "Hazards", "Environment"]);
 });
 
 t("every layer toggle survives normalization (real app config)", () => {
   const out = normalizeControlGroups([
-    { title: "Navigation", items: [item("Live routing"), item("Weather forecasts")] },
-    { title: "Safety", items: [item("Road Risk")] },
-    { title: "Hazards", items: [item("Incidents"), item("Hazard markers"), item("Fixed potholes"), item("BBMP potholes")] },
-    { title: "Analytics", items: [item("Safety heatmap")] },
+    { title: "Navigation", items: [item("Live routing")] },
+    { title: "Safety", items: [item("Road Risk"), item("Incidents"), item("Safety heatmap")] },
+    { title: "Hazards", items: [item("Hazard markers"), item("Fixed potholes"), item("BBMP potholes")] },
+    { title: "Environment", items: [item("Weather forecasts")] },
   ]);
   const flat = out.flatMap((g) => g.items.map((i) => i.label));
   assert.equal(out.length, 4);

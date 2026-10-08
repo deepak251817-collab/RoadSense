@@ -2,7 +2,7 @@
  * Map control grouping.
  *
  * The layer popover presents controls under four canonical groups —
- * Navigation, Safety, Hazards, Analytics. This module owns that canonical
+ * Navigation, Safety, Hazards, Environment. This module owns that canonical
  * order and a pure normalizer that validates arbitrary caller-supplied
  * groups: malformed items are dropped (never rendered half-broken),
  * duplicate labels are removed, empty groups disappear, and known group
@@ -11,7 +11,7 @@
  */
 
 /** Canonical group titles, in display order. */
-export const CONTROL_GROUP_ORDER = ["Navigation", "Safety", "Hazards", "Analytics"];
+export const CONTROL_GROUP_ORDER = ["Navigation", "Safety", "Hazards", "Environment"];
 
 /** @param {unknown} v */
 const isNonEmptyString = (v) => typeof v === "string" && v.trim().length > 0;

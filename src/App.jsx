@@ -3570,19 +3570,19 @@ export default function App() {
 								bbmpLoaded={bbmpLoaded}								groups={[
 									{ title: 'Navigation', items: [
 										{ label: 'Live routing', hint: 'live traffic overlay on routes', checked: congestionVisible, onChange: setCongestionVisible },
-										{ label: 'Weather forecasts', hint: 'forecast points along the route', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
 									] },
 									{ title: 'Safety', items: [
 										{ label: 'Road Risk', hint: 'road risk overlay along the route', checked: roadRiskOn, onChange: setRoadRiskOn },
+										{ label: 'Incidents', hint: 'live incident markers', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
+										{ label: 'Safety heatmap', hint: 'weighted hazard density (severity × recency)', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
 									] },
 									{ title: 'Hazards', items: [
-										{ label: 'Incidents', hint: 'live incident markers', checked: incidentMarkersOn, onChange: setIncidentMarkersOn },
 										{ label: 'Hazard markers', hint: 'reported hazards on the map', checked: hazardMarkersOn, onChange: setHazardMarkersOn },
 										{ label: 'Fixed potholes', hint: 'repaired reports kept for reference', checked: showFixed, onChange: setShowFixed },
 										{ label: 'BBMP potholes', hint: 'civic pothole dataset', checked: bbmpVisible, onChange: setBbmpVisible },
 									] },
-									{ title: 'Analytics', items: [
-										{ label: 'Safety heatmap', hint: 'weighted hazard density (severity × recency)', checked: safetyHeatmapOn, onChange: setSafetyHeatmapOn },
+									{ title: 'Environment', items: [
+										{ label: 'Weather forecasts', hint: 'forecast points along the route', checked: weatherMarkersOn, onChange: setWeatherMarkersOn },
 									] },
 								]}
 								/>
