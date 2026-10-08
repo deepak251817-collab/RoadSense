@@ -15,7 +15,7 @@
 import { spawnSync } from "node:child_process";
 import {
   cpSync, existsSync, mkdtempSync, readFileSync,
-  readdirSync, rmSync, writeFileSync,
+  readdirSync, rmSync, symlinkSync, writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -73,6 +73,15 @@ for (const file of suites) {
     const T = mkdtempSync(join(tmpdir(), "stars-test-"));
     try {
       cpSync(join(ROOT, "src"), join(T, "src"), { recursive: true });
+      // Link node_modules into the harness so app modules that import real
+      // dependencies (e.g. exifr) resolve from the temp dir. Junctions need
+      // no admin rights on Windows; plain symlinks elsewhere.
+      if (existsSync(join(ROOT, "node_modules"))) {
+        try {
+          symlinkSync(join(ROOT, "node_modules"), join(T, "node_modules"),
+            process.platform === "win32" ? "junction" : "dir");
+        } catch { /* resolution falls back to failing loudly below */ }
+      }
       for (const p of walkJs(join(T, "src"))) {
         const src = readFileSync(p, "utf8");
         const rewritten = addExtensions(src);
