@@ -46,3 +46,151 @@ html, body, #root {
   white-space: nowrap;
   border: 0;
 }
+
+/* ============================================================
+   STARS DESIGN SYSTEM (UI Phase 1)
+   Shared component classes. Panels use these instead of
+   re-inventing card/button/badge styles. All states include a
+   text label — never color alone.
+   ============================================================ */
+
+@layer components {
+  /* ---------- Typography hierarchy ---------- */
+  .stars-display {
+    @apply text-2xl font-bold tracking-tight;
+  }
+  .stars-h1 {
+    @apply text-lg sm:text-xl font-bold tracking-tight;
+  }
+  .stars-h2 {
+    @apply text-sm sm:text-base font-semibold;
+  }
+  .stars-h3 {
+    @apply text-sm font-semibold;
+  }
+  .stars-label {
+    @apply text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400;
+  }
+  .stars-caption {
+    @apply text-xs text-gray-500 dark:text-gray-400;
+  }
+  .stars-num {
+    @apply font-bold tabular-nums;
+  }
+
+  /* ---------- Cards & panels ---------- */
+  .stars-card {
+    @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-card shadow-card;
+  }
+  .stars-card-pad {
+    @apply p-3 sm:p-4;
+  }
+  .stars-divider {
+    @apply border-t border-gray-200 dark:border-gray-700;
+  }
+
+  /* ---------- Buttons ---------- */
+  .stars-btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-control px-3 py-2
+      text-sm font-semibold transition-colors duration-150
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1
+      dark:focus-visible:ring-offset-gray-900
+      disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98];
+  }
+  .stars-btn-primary {
+    @apply stars-btn bg-primary-600 text-white hover:bg-primary-700;
+  }
+  .stars-btn-secondary {
+    @apply stars-btn bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100
+      border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700;
+  }
+  .stars-btn-ghost {
+    @apply stars-btn bg-transparent text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800;
+  }
+  .stars-btn-danger {
+    @apply stars-btn bg-red-600 text-white hover:bg-red-700;
+  }
+
+  /* ---------- Inputs ---------- */
+  .stars-input {
+    @apply w-full rounded-control border border-gray-300 dark:border-gray-600
+      bg-white dark:bg-gray-900 px-3 py-2 text-sm
+      placeholder:text-gray-400 dark:placeholder:text-gray-500
+      focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500;
+  }
+
+  /* ---------- Badges & status (text always present) ---------- */
+  .stars-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5
+      text-[11px] font-bold uppercase tracking-wide;
+  }
+  .stars-badge-ok {
+    @apply stars-badge bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300;
+  }
+  .stars-badge-warn {
+    @apply stars-badge bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300;
+  }
+  .stars-badge-danger {
+    @apply stars-badge bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300;
+  }
+  .stars-badge-info {
+    @apply stars-badge bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300;
+  }
+  .stars-badge-neutral {
+    @apply stars-badge bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300;
+  }
+
+  /* ---------- Segmented control (mode switches) ---------- */
+  .stars-seg {
+    @apply inline-flex rounded-control border border-gray-300 dark:border-gray-600 overflow-hidden;
+  }
+  .stars-seg-item {
+    @apply px-3 py-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300
+      hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150;
+  }
+  .stars-seg-item[aria-pressed='true'] {
+    @apply bg-primary-600 text-white hover:bg-primary-600;
+  }
+
+  /* ---------- Info / simulation / honesty strips ---------- */
+  .stars-note {
+    @apply rounded-control border px-3 py-2 text-xs;
+  }
+  .stars-note-info {
+    @apply stars-note bg-blue-50 border-blue-200 text-blue-800
+      dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200;
+  }
+  .stars-note-warn {
+    @apply stars-note bg-amber-50 border-amber-200 text-amber-800
+      dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200;
+  }
+
+  /* ---------- Tooltip (CSS-only, keyboard accessible) ---------- */
+  [data-tip] {
+    position: relative;
+  }
+  [data-tip]:hover::after,
+  [data-tip]:focus-visible::after {
+    content: attr(data-tip);
+    position: absolute;
+    z-index: 60;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(100% + 6px);
+    white-space: nowrap;
+    background: #111827;
+    color: #f9fafb;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.3;
+    padding: 4px 8px;
+    border-radius: 6px;
+    pointer-events: none;
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.2);
+  }
+
+  /* ---------- Skeleton loading ---------- */
+  .stars-skeleton {
+    @apply animate-pulse rounded-control bg-gray-200 dark:bg-gray-700;
+  }
+}
