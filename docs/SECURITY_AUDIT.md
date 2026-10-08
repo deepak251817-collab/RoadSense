@@ -1,4 +1,4 @@
-# Security Audit — STARS V3 (Phase 33)
+# Security Audit — STARS V3 (Phase 33, final re-verification Phase 39)
 
 Date: 2026-10-08 · Scope: repository hygiene, secrets, client-side injection
 surface, dependency advisories, and runtime hardening.
@@ -98,3 +98,19 @@ Tailwind 4 upgrade in a future phase.
    client PIN is not a security boundary.
 4. Consider a Content-Security-Policy meta tag if the app is ever hosted
    outside a trusted origin (needs testing against Mapbox blob workers).
+
+## 7. Final sign-off (Phase 39)
+
+Re-verified against the release tree (`e4a2e3d`):
+
+- `.env` is git-ignored and untracked; `.env.example` contains only empty
+  placeholders plus the rotation notice.
+- No credential-shaped strings (API key / token / secret / password literals)
+  in any tracked file; README contains no keys; no `pk.ey…` token shapes
+  outside the documented audit history.
+- No `eval` / `new Function` in `src/`; the remaining `innerHTML` sinks were
+  fixed in Phase 33 and escape all user-derived strings.
+- `npm audit --omit=dev` → **0 vulnerabilities**. The dev-only toolchain
+  advisories (Vite/Tailwind majors) remain accepted per §4/§6.
+- **Rotation of historically committed keys remains required** — this is an
+  operational step outside the repository and cannot be closed by code.
