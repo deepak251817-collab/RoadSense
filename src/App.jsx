@@ -4,7 +4,7 @@ import moderateIcon from "./assets/potholes/moderate.svg";
 import highIcon from "./assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -48,6 +48,7 @@ import { recommendRoute, buildRecommendationReasons } from "./features/routing/r
 import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "./services/incidentService";
 import { fetchJsonCached, fetchWithTimeout } from "./services/httpClient";
 import HazardAlertStack from "./features/safety/HazardAlertStack";
+import MapControlDock from "./features/map/MapControlDock";
 import HotspotsPanel from "./features/safety/HotspotsPanel";
 import TripsPanel from "./features/community/TripsPanel";
 
@@ -3386,174 +3387,104 @@ export default function App() {
 						</div>{/* end controls inner grid / actions */}
 					</div>{/* end controls card */}
 
-					{/* Map filters: visible to all users */}
-					<div className="mt-4 flex flex-wrap gap-3 text-sm">
-						<label className="inline-flex items-center gap-2 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md">
-						<input type="checkbox" checked={showFixed} onChange={(e) => setShowFixed(e.target.checked)} className="w-4 h-4 rounded" />
-						<span className="font-medium">Show fixed potholes</span>
-					</label>
-					<label className="inline-flex items-center gap-2 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md" title="Density of active hazard reports (severity × recency)">
-						<input type="checkbox" checked={safetyHeatmapOn} onChange={(e) => setSafetyHeatmapOn(e.target.checked)} className="w-4 h-4 rounded" />
-						<span className="font-medium">Safety heatmap</span>
-						{userReports.length === 0 && <span className="text-xs text-gray-400">(no reports yet)</span>}
-					</label>
-					<button
-						onClick={() => setShowHotspots((v) => !v)}
-						aria-expanded={showHotspots}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showHotspots ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<AlertTriangle className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Hotspots{hotspots.length > 0 ? ` (${hotspots.length})` : ''}</span>
-					</button>
-					<button
-						onClick={() => setShowTrips((v) => !v)}
-						aria-expanded={showTrips}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showTrips ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<List className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Trips{tripHistory.length > 0 ? ` (${tripHistory.length})` : ''}</span>
-					</button>
-					<button
-						onClick={() => setShowAnalytics((v) => !v)}
-						aria-expanded={showAnalytics}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showAnalytics ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<BarChart3 className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Analytics</span>
-					</button>
-					<button
-						onClick={() => setShowPredictive((v) => !v)}
-						aria-expanded={showPredictive}
-						disabled={!routes?.length}
-						title={routes?.length ? 'Show predictive safety estimates for the selected route' : 'Find routes first to see predictive safety'}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showPredictive ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<TrendingUp className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Predict</span>
-					</button>
-					<button
-						onClick={() => setShowSegments((v) => !v)}
-						aria-expanded={showSegments}
-						disabled={!routes?.length}
-						title={routes?.length ? 'Show per-segment road risk for the selected route' : 'Find routes first to see segment risk'}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showSegments ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<Gauge className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Segments</span>
-					</button>
-					<button
-						onClick={() => setShowWaterlogging((v) => !v)}
-						aria-expanded={showWaterlogging}
-						disabled={!routes?.length}
-						title={routes?.length ? 'Show waterlogging/flood risk estimate for the selected route' : 'Find routes first to see waterlogging risk'}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showWaterlogging ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<CloudRain className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Flood</span>
-					</button>
-					<button
-						onClick={() => setShowNight((v) => !v)}
-						aria-expanded={showNight}
-						disabled={!routes?.length}
-						title={routes?.length ? 'Show night-safety estimate for the selected route' : 'Find routes first to see night safety'}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showNight ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						{nightSafety?.isNight ? <Moon className="w-4 h-4" aria-hidden="true" /> : <Sun className="w-4 h-4" aria-hidden="true" />}
-						<span className="font-medium">Night</span>
-					</button>
-					<button
-						onClick={() => setShowRoadHealth((v) => !v)}
-						aria-expanded={showRoadHealth}
-						title="Show the report-based road health index"
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showRoadHealth ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<Activity className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Road Health</span>
-					</button>
-					<button
-						onClick={() => setShowChanges((v) => !v)}
-						aria-expanded={showChanges}
-						title="Show what changed in the hazard database since the baseline"
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showChanges ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<GitCompareArrows className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Changes</span>
-					</button>
-					<button
-						onClick={() => setShowPriority((v) => !v)}
-						aria-expanded={showPriority}
-						title="Show active hazards ranked by repair urgency"
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showPriority ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<Wrench className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Priority</span>
-					</button>
-					<button
-						onClick={() => setShowWhatIf((v) => !v)}
-						aria-expanded={showWhatIf}
-						disabled={!routes?.length}
-						title={routes?.length ? 'Simulate repair scenarios for the selected route' : 'Find routes first to run a simulation'}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${showWhatIf ? 'border-fuchsia-500 bg-fuchsia-50 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<FlaskConical className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Simulate</span>
-					</button>
-					<button
-						onClick={() => setShowRoutePrefs((v) => !v)}
-						aria-expanded={showRoutePrefs}
-						title="Route preferences: priority and road avoidance"
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${showRoutePrefs ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Preferences</span>
-					</button>
-					<button
-						onClick={() => setEmergencyMode((v) => !v)}
-						aria-expanded={emergencyMode}
-						title={`Emergency assistance (${EMERGENCY_LABEL})`}
-						className={`inline-flex items-center gap-2 border-2 rounded-xl px-4 py-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md ${emergencyMode ? 'border-red-500 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800'}`}
-					>
-						<Siren className="w-4 h-4" aria-hidden="true" />
-						<span className="font-medium">Emergency</span>
-					</button>
-					<div className="inline-flex items-center gap-3 border-2 border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2 bg-white dark:bg-gray-900 shadow-sm hover:shadow-md transition-all duration-200" role="group" aria-label="Voice guidance settings">
-						<span
-							className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-200"
-							title={isSpeechSupported() ? "Voice guidance" : "Speech synthesis is not supported in this browser"}
-						>
-							{voiceSettings.navigation || voiceSettings.safety ? <Volume2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" /> : <VolumeX className="w-4 h-4 text-gray-400" aria-hidden="true" />}
-							Voice
-						</span>
-						<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-							<input
-								type="checkbox"
-								checked={voiceSettings.navigation}
-								disabled={!isSpeechSupported()}
-								onChange={(e) => setVoiceSettings((s) => {
-									const next = { ...s, navigation: e.target.checked };
-									if (!next.navigation) cancelSpeech();
-									return next;
-								})}
-								className="w-4 h-4 rounded"
-							/>
-							<span>Navigation</span>
-						</label>
-						<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
-							<input
-								type="checkbox"
-								checked={voiceSettings.safety}
-								disabled={!isSpeechSupported()}
-								onChange={(e) => setVoiceSettings((s) => {
-									const next = { ...s, safety: e.target.checked };
-									if (!next.safety) cancelSpeech();
-									return next;
-								})}
-								className="w-4 h-4 rounded"
-							/>
-							<span>Safety</span>
-						</label>
-					</div>
-					</div>
+					{/* Map intelligence controls: grouped dock — Navigation / Safety / Hazards / Environment / Analytics */}
+					<MapControlDock
+						groups={[
+							{
+								key: "navigation",
+								label: "Navigation",
+								icon: Compass,
+								items: [
+									{ key: "emergency", label: "Emergency", icon: Siren, active: emergencyMode, hint: `Emergency assistance (${EMERGENCY_LABEL})`, onClick: () => setEmergencyMode((v) => !v) },
+									{ key: "simulate", label: "Simulate", icon: FlaskConical, active: showWhatIf, disabled: !routes?.length, hint: routes?.length ? "Simulate scenarios for the selected route" : "Find routes first to run a simulation", onClick: () => setShowWhatIf((v) => !v) },
+									{ key: "preferences", label: "Preferences", icon: SlidersHorizontal, active: showRoutePrefs, hint: "Route preferences: priority and road avoidance", onClick: () => setShowRoutePrefs((v) => !v) },
+									{
+										key: "voice",
+										type: "custom",
+										render: () => (
+											<>
+												<span
+													className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200"
+													title={isSpeechSupported() ? "Voice guidance" : "Speech synthesis is not supported in this browser"}
+												>
+													{voiceSettings.navigation || voiceSettings.safety ? <Volume2 className="w-4 h-4 text-primary-600 dark:text-primary-400" aria-hidden="true" /> : <VolumeX className="w-4 h-4 text-gray-400" aria-hidden="true" />}
+													Voice
+												</span>
+												<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+													<input
+														type="checkbox"
+														checked={voiceSettings.navigation}
+														disabled={!isSpeechSupported()}
+														onChange={(e) => setVoiceSettings((s) => {
+															const next = { ...s, navigation: e.target.checked };
+															if (!next.navigation) cancelSpeech();
+															return next;
+														})}
+														className="w-4 h-4 rounded"
+													/>
+													Navigation
+												</label>
+												<label className="inline-flex items-center gap-1.5 text-xs cursor-pointer">
+													<input
+														type="checkbox"
+														checked={voiceSettings.safety}
+														disabled={!isSpeechSupported()}
+														onChange={(e) => setVoiceSettings((s) => {
+															const next = { ...s, safety: e.target.checked };
+															if (!next.safety) cancelSpeech();
+															return next;
+														})}
+														className="w-4 h-4 rounded"
+													/>
+													Safety
+												</label>
+											</>
+										),
+									},
+								],
+							},
+							{
+								key: "safety",
+								label: "Safety",
+								icon: ShieldCheck,
+								items: [
+									{ key: "predict", label: "Predict", icon: TrendingUp, active: showPredictive, disabled: !routes?.length, hint: routes?.length ? "Show predictive safety estimates for the selected route" : "Find routes first to see predictive safety", onClick: () => setShowPredictive((v) => !v) },
+									{ key: "segments", label: "Segments", icon: Gauge, active: showSegments, disabled: !routes?.length, hint: routes?.length ? "Show per-segment road risk for the selected route" : "Find routes first to see segment risk", onClick: () => setShowSegments((v) => !v) },
+									{ key: "hotspots", label: `Hotspots${hotspots.length > 0 ? ` (${hotspots.length})` : ""}`, icon: AlertTriangle, active: showHotspots, hint: "Ranked hazard hotspots on the map", onClick: () => setShowHotspots((v) => !v) },
+									{ key: "heatmap", label: "Safety heatmap", active: safetyHeatmapOn, hint: userReports.length === 0 ? "Density of active hazard reports (severity × recency) — no reports yet" : "Density of active hazard reports (severity × recency)", onClick: () => setSafetyHeatmapOn((v) => !v) },
+								],
+							},
+							{
+								key: "hazards",
+								label: "Hazards",
+								icon: AlertTriangle,
+								items: [
+									{ key: "fixed", label: "Fixed potholes", icon: CheckCircle2, active: showFixed, hint: "Repaired reports kept for reference", onClick: () => setShowFixed((v) => !v) },
+									{ key: "priority", label: "Priority", icon: Wrench, active: showPriority, hint: "Active hazards ranked by repair urgency", onClick: () => setShowPriority((v) => !v) },
+									{ key: "changes", label: "Changes", icon: GitCompareArrows, active: showChanges, hint: "What changed in the hazard database since the baseline", onClick: () => setShowChanges((v) => !v) },
+									{ key: "roadHealth", label: "Road Health", icon: Activity, active: showRoadHealth, hint: "Report-based road health index", onClick: () => setShowRoadHealth((v) => !v) },
+								],
+							},
+							{
+								key: "environment",
+								label: "Environment",
+								icon: CloudRain,
+								items: [
+									{ key: "flood", label: "Flood", icon: CloudRain, active: showWaterlogging, disabled: !routes?.length, hint: routes?.length ? "Waterlogging/flood risk estimate for the selected route" : "Find routes first to see waterlogging risk", onClick: () => setShowWaterlogging((v) => !v) },
+									{ key: "night", label: "Night", icon: nightSafety?.isNight ? Moon : Sun, active: showNight, disabled: !routes?.length, hint: routes?.length ? "Night-safety estimate for the selected route" : "Find routes first to see night safety", onClick: () => setShowNight((v) => !v) },
+								],
+							},
+							{
+								key: "analytics",
+								label: "Analytics",
+								icon: BarChart3,
+								items: [
+									{ key: "trips", label: `Trips${tripHistory.length > 0 ? ` (${tripHistory.length})` : ""}`, icon: List, active: showTrips, hint: "Recorded trip history", onClick: () => setShowTrips((v) => !v) },
+									{ key: "analyticsPanel", label: "Analytics", icon: BarChart3, active: showAnalytics, hint: "Safety analytics from recorded trips", onClick: () => setShowAnalytics((v) => !v) },
+								],
+							},
+						]}
+					/>
 					{/* Ranked hazard hotspots */}
 					<HotspotsPanel
 						show={showHotspots}
@@ -3644,7 +3575,7 @@ export default function App() {
 						{/* Map overlay: selected route chip + quick actions */}
 						{selectedRouteId != null && (
 							<div className="absolute top-4 left-4 flex items-center gap-2 animate-in slide-in-from-left duration-300">
-								<div className="px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-indigo-600 to-purple-600 text-white backdrop-blur-sm shadow-lg border-2 border-white/30">Route {Number(selectedRouteId) + 1}</div>
+								<div className="px-4 py-2 rounded-xl text-sm font-bold bg-primary-600 text-white shadow-card">Route {Number(selectedRouteId) + 1}</div>
 							</div>
 						)}
 						<div className="absolute top-4 right-4 flex items-center gap-2">
@@ -3673,7 +3604,7 @@ export default function App() {
 							<button
 								onClick={() => setFullMap((v) => !v)}
 								title={fullMap ? 'Exit full view' : 'Full view'}
-								className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
+									className="px-2.5 py-1.5 rounded-control text-xs font-semibold bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-card hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
 								{fullMap ? <div className="inline-flex items-center gap-1.5"><Minimize2 className="w-4 h-4" /> Exit</div> : <div className="inline-flex items-center gap-1.5"><Maximize2 className="w-4 h-4" /> Full</div>}
 							</button>
@@ -3687,19 +3618,17 @@ export default function App() {
 										map.fitBounds([[minX, minY], [maxX, maxY]], { padding: 60, duration: 600 });
 									} catch { }
 								}}
-								className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
+								className="px-2.5 py-1.5 rounded-control text-xs font-semibold bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-card hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
 								Zoom to route
-							</button>
-							<button
-								onClick={() => { const map = window._mapInstance; if (!map || !sourceCoord) return; map.flyTo({ center: sourceCoord, zoom: 14 }); }}
-								className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 hover:bg-white shadow"
+							</button>								<button
+									onClick={() => { const map = window._mapInstance; if (!map || !sourceCoord) return; map.flyTo({ center: sourceCoord, zoom: 14 }); }}
+									className="px-2.5 py-1.5 rounded-control text-xs font-semibold bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-card hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
 								Center source
-							</button>
-							<button
-								onClick={() => { const map = window._mapInstance; if (!map || !destCoord) return; map.flyTo({ center: destCoord, zoom: 14 }); }}
-								className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200 dark:border-gray-700 hover:bg-white shadow"
+							</button>								<button
+									onClick={() => { const map = window._mapInstance; if (!map || !destCoord) return; map.flyTo({ center: destCoord, zoom: 14 }); }}
+									className="px-2.5 py-1.5 rounded-control text-xs font-semibold bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-card hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
 								Center destination
 							</button>
@@ -3707,24 +3636,28 @@ export default function App() {
 						{/* Floating quick actions (bottom-right) */}
 						<div className="absolute bottom-4 right-4 flex flex-col gap-3">
 							<button
-								title="Search"
+								data-tip="Search places"
+								aria-label="Search places"
 								onClick={() => {
 									try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
 									setTimeout(() => { try { sourceInputRef.current?.focus(); } catch {} }, 250);
 								}}
-								className="group p-3.5 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 text-white shadow-lg hover:shadow-xl hover:shadow-blue-500/50 dark:hover:shadow-blue-600/50 hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white/20"
+								className="p-3 rounded-full bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-pop hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
-								<Search className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" />
+								<Search className="w-5 h-5" aria-hidden="true" />
 							</button>
 							<button
-								title="My location"
+								data-tip="My location"
+								aria-label="Center map on my location"
 								onClick={handleUseMyLocation}
-								className="group p-3.5 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 text-white shadow-lg hover:shadow-xl hover:shadow-emerald-500/50 dark:hover:shadow-emerald-600/50 hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white/20"
+								className="p-3 rounded-full bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-pop hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
 							>
-								<LocateFixed className="w-5 h-5 group-hover:scale-110 transition-transform duration-300" />
+								<LocateFixed className="w-5 h-5" aria-hidden="true" />
 							</button>
 							<button
-								title="Traffic"
+								data-tip="Traffic on route"
+								aria-label="Show traffic on route"
+								aria-pressed={openTrafficId != null}
 								onClick={() => {
 									const idx = selectedRouteId != null ? Number(selectedRouteId) : (routes?.length ? 0 : null);
 									if (idx == null) { setNotice({ type: 'info', message: 'Select a route to view traffic.' }); setTimeout(() => setNotice(null), 2500); return; }
@@ -3732,12 +3665,14 @@ export default function App() {
 									setOpenTrafficId(newOpen);
 									if (newOpen && !trafficByRoute[idx]) fetchTrafficForRoute(idx);
 								}}
-								className="group p-3.5 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 dark:from-orange-600 dark:to-orange-700 text-white shadow-lg hover:shadow-xl hover:shadow-orange-500/50 dark:hover:shadow-orange-600/50 hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white/20"
+								className={`p-3 rounded-full border shadow-pop transition-colors duration-150 ${openTrafficId != null ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700' : 'bg-white/95 dark:bg-gray-900/95 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800'}`}
 							>
-								<Gauge className="w-5 h-5 group-hover:rotate-45 transition-transform duration-300" />
+								<Gauge className="w-5 h-5" aria-hidden="true" />
 							</button>
 							<button
-								title="Weather"
+								data-tip="Weather on route"
+								aria-label="Show weather on route"
+								aria-pressed={openWeatherId != null}
 								onClick={() => {
 									const idx = selectedRouteId != null ? Number(selectedRouteId) : (routes?.length ? 0 : null);
 									if (idx == null) { setNotice({ type: 'info', message: 'Select a route to view weather.' }); setTimeout(() => setNotice(null), 2500); return; }
@@ -3745,21 +3680,22 @@ export default function App() {
 									setOpenWeatherId(newOpen);
 									if (newOpen) { if (!routeWeather[idx]) fetchWeatherForRoute(idx); else renderWeatherMarkersFor(idx); } else { removeWeatherMarkersFor(idx); }
 								}}
-								className="group p-3.5 rounded-full bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-600 dark:to-cyan-700 text-white shadow-lg hover:shadow-xl hover:shadow-cyan-500/50 dark:hover:shadow-cyan-600/50 hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white/20"
+								className={`p-3 rounded-full border shadow-pop transition-colors duration-150 ${openWeatherId != null ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700' : 'bg-white/95 dark:bg-gray-900/95 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800'}`}
 							>
-								<CloudSun className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" />
+								<CloudSun className="w-5 h-5" aria-hidden="true" />
 							</button>
 							<button
-								title="Report pothole"
+								data-tip="Report a hazard"
+								aria-label="Report a road hazard"
 								onClick={() => {
 									try {
 										reportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 										setTimeout(() => openCameraModal('report'), 400);
 									} catch {}
 								}}
-								className="group p-4 rounded-full bg-gradient-to-br from-rose-500 to-pink-600 dark:from-rose-600 dark:to-pink-700 text-white shadow-xl hover:shadow-2xl hover:shadow-rose-500/60 dark:hover:shadow-rose-600/60 hover:scale-110 active:scale-95 transition-all duration-300 border-2 border-white/30 animate-pulse"
+								className="p-3.5 rounded-full bg-primary-600 border border-primary-700 text-white shadow-pop hover:bg-primary-700 transition-colors duration-150"
 							>
-								<Camera className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
+								<Camera className="w-6 h-6" aria-hidden="true" />
 							</button>
 						</div>
 						{/* On-map route chips: show small boxes for each route with time/distance; click to select */}
