@@ -69,7 +69,7 @@ import {
 import RepairPriorityPanel from "./features/admin/RepairPriorityPanel";
 import { rankRepairs } from "./features/admin/repairPriority";
 import MunicipalDashboard from "./features/admin/MunicipalDashboard";
-import { summarizeMunicipal } from "./features/admin/municipalSummary";
+import { summarizeMunicipal, applyReportFilters, locationOptions } from "./features/admin/municipalSummary";
 import WhatIfPanel from "./features/routing/WhatIfPanel";
 import { runWhatIf } from "./features/routing/whatIf";
 import RoutePreferencesPanel from "./features/routing/RoutePreferencesPanel";
@@ -1229,9 +1229,15 @@ export default function App() {
 
 	// ---- Municipal dashboard (admin-only; utils/municipalSummary) ----
 	const [showMunicipal, setShowMunicipal] = useState(false);
+	// Dashboard filters (date, severity, type, status, priority) — spec Phase 23
+	const [municipalFilters, setMunicipalFilters] = useState({ date: "all", severity: "all", type: "all", status: "all", priority: "all", location: "all" });
+	const municipalReports = useMemo(
+		() => applyReportFilters(userReports, municipalFilters),
+		[userReports, municipalFilters]
+	);
 	const municipalSummary = useMemo(
-		() => summarizeMunicipal({ reports: userReports, snapshots: changeSnapshots }),
-		[userReports, changeSnapshots]
+		() => summarizeMunicipal({ reports: municipalReports, snapshots: changeSnapshots }),
+		[municipalReports, changeSnapshots]
 	);
 
 	// ---- Segment-level risk analysis for the selected route ----
@@ -4354,6 +4360,11 @@ export default function App() {
 							<MunicipalDashboard
 								show={showMunicipal}
 								summary={municipalSummary}
+								reports={municipalReports}
+								filters={municipalFilters}
+								onFiltersChange={setMunicipalFilters}
+								locationChoices={locationOptions(userReports)}
+								totalReports={userReports.length}
 								onClose={() => setShowMunicipal(false)}
 								onFocus={(report) => {
 									const map = window._mapInstance;

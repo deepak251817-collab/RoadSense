@@ -1,6 +1,7 @@
 import React from "react";
 import { Building2 } from "lucide-react";
-import { MUNICIPAL_LABEL } from "./municipalSummary";
+import { MUNICIPAL_LABEL, MUNICIPAL_FILTERS } from "./municipalSummary";
+import { normalizeStatus } from "./hazardLifecycle";
 import { PRIORITY_LABEL } from "./repairPriority";
 import { CHANGE_LABEL } from "../road-conditions/changeDetection";
 import { hazardTypeMeta } from "../safety/hazardTypes";
@@ -21,9 +22,16 @@ import { hazardTypeMeta } from "../safety/hazardTypes";
  * @param {Function} props.onClose hide the panel
  * @param {Function} props.onFocus report => void — fly the map to a report
  */
-export default function MunicipalDashboard({ show, summary, onClose, onFocus }) {
+export default function MunicipalDashboard({ show, summary, reports = [], filters = {}, onFiltersChange, locationChoices = [], totalReports, onClose, onFocus }) {
   if (!show || !summary) return null;
-  const { kpi, byType, lifecycle, topPriorities, trend, reasons } = summary;
+  const { kpi, byType, lifecycle, topPriorities, critical, areas, trend, reasons, health } = summary;
+  const byTypeCount = (key) => byType.find((t) => t.key === key)?.count || 0;
+  const verifiedCount = lifecycle.find((l) => l.status === "verified")?.count || 0;
+  const recentFixed = (Array.isArray(reports) ? reports : [])
+    .filter((r) => normalizeStatus(r.status) === "fixed")
+    .sort((a, b) => Number(b.reviewedAt || b.createdAt || 0) - Number(a.reviewedAt || a.createdAt || 0))
+    .slice(0, 3);
+  const filterActive = Object.values(filters).some((v) => v && v !== "all");
   const maxType = byType.reduce((m, t) => Math.max(m, t.count), 0) || 1;
 
   const kpis = [
@@ -60,6 +68,47 @@ export default function MunicipalDashboard({ show, summary, onClose, onFocus }) 
       <div className="mb-3 text-[11px] text-slate-700 dark:text-slate-300">
         {MUNICIPAL_LABEL} — aggregated from reports stored locally in this browser. Not connected to
         any municipal system, not official statistics, not a prediction.
+      </div>
+
+      {/* Filters: date, severity, type, status, priority (spec Phase 23) */}
+      <div className="mb-3 flex flex-wrap items-end gap-2" role="group" aria-label="Dashboard filters">
+        {[
+          ["date", "Date"],
+          ["severity", "Severity"],
+          ["type", "Type"],
+          ["status", "Status"],
+          ["priority", "Priority"],
+          ["location", "Location"],
+        ].map(([key, labelText]) => (
+          <label key={key} className="text-[10px] font-semibold text-gray-500 dark:text-gray-400">
+            {labelText}
+            <select
+              value={filters[key] ?? "all"}
+              onChange={(e) => onFiltersChange && onFiltersChange({ ...filters, [key]: e.target.value })}
+              className="ml-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-1.5 py-1 text-[11px] font-normal text-gray-800 dark:text-gray-200"
+            >
+              {(key === "location" ? locationChoices : MUNICIPAL_FILTERS[key] || []).map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        {filterActive && (
+          <button
+            onClick={() =>
+              onFiltersChange &&
+              onFiltersChange({ date: "all", severity: "all", type: "all", status: "all", priority: "all", location: "all" })
+            }
+            className="text-[10px] text-slate-600 dark:text-slate-300 underline"
+          >
+            Clear
+          </button>
+        )}
+        <span className="ml-auto text-[10px] text-gray-500 dark:text-gray-400">
+          Showing {kpi.total} of {totalReports ?? kpi.total} reports
+        </span>
       </div>
 
       {/* KPI cards */}
@@ -173,6 +222,119 @@ export default function MunicipalDashboard({ show, summary, onClose, onFocus }) 
             ))}
           </ol>
         )}
+      </div>
+
+      {/* Critical roads — active high/critical hazards by area (spec Phase 23) */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-gray-900/60 p-3 mb-3">
+        <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1.5">
+          Critical roads <span className="font-normal text-gray-500">(active high/critical hazards)</span>
+        </div>
+        {!critical || critical.length === 0 ? (
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">No active high or critical hazards.</div>
+        ) : (
+          <ul className="space-y-1">
+            {critical.slice(0, 6).map((c) => (
+              <li key={c.report.id} className="flex items-center gap-2 text-[11px]">
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: c.sev === "critical" ? "#dc2626" : "#f97316" }}
+                  aria-hidden="true"
+                />
+                <span className="text-gray-700 dark:text-gray-200 truncate flex-1">
+                  {hazardTypeMeta(c.report.type).label} — {c.area}
+                </span>
+                <span className="text-[9px] font-bold uppercase text-red-600 dark:text-red-400">{c.sev}</span>
+                {onFocus && (
+                  <button
+                    onClick={() => onFocus(c.report)}
+                    className="text-[10px] text-slate-600 dark:text-slate-300 underline flex-shrink-0"
+                  >
+                    map
+                  </button>
+                )}
+              </li>
+            ))}
+            {critical.length > 6 && (
+              <li className="text-[10px] text-gray-500 dark:text-gray-400">+{critical.length - 6} more</li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      {/* Deteriorating roads vs baseline (spec Phase 23) */}
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-gray-900/60 p-3 mb-3">
+        <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1.5">
+          Road condition change <span className="font-normal text-gray-500">({areas?.label ?? CHANGE_LABEL})</span>
+        </div>
+        {areas?.insufficientHistory ? (
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">{areas.reason}</div>
+        ) : !areas || areas.items.length === 0 ? (
+          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+            No new or resolved hazards since the baseline snapshot.
+          </div>
+        ) : (
+          <ul className="space-y-1">
+            {areas.items.slice(0, 6).map((a) => (
+              <li key={a.cell} className="flex items-center gap-2 text-[11px]">
+                <span
+                  className="w-16 shrink-0 text-[9px] font-bold uppercase"
+                  style={{
+                    color:
+                      a.direction === "deteriorating" ? "#ef4444" : a.direction === "improving" ? "#16a34a" : "#6b7280",
+                  }}
+                >
+                  {a.direction}
+                </span>
+                <span className="text-gray-700 dark:text-gray-200 truncate flex-1">{a.area}</span>
+                <span className="text-gray-500 dark:text-gray-400">
+                  +{a.newHazards} new · {a.resolvedHazards} resolved
+                </span>
+              </li>
+            ))}
+            {areas.items.length > 6 && (
+              <li className="text-[10px] text-gray-500 dark:text-gray-400">+{areas.items.length - 6} more areas</li>
+            )}
+          </ul>
+        )}
+      </div>
+
+      {/* Road health + coverage sections (spec Phase 23) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-gray-900/60 p-3">
+          <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1">Road Health</div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold" style={{ color: health?.grade?.color }}>
+              {health?.index ?? "—"}
+            </span>
+            <span className="text-[11px] font-semibold" style={{ color: health?.grade?.color }}>
+              {health?.grade?.label ?? "—"}
+            </span>
+          </div>
+          <div className="text-[10px] text-gray-500 dark:text-gray-400">Long-term condition from stored reports and repairs.</div>
+        </div>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-gray-900/60 p-3">
+          <div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1">
+            Hazards &amp; activity
+          </div>
+          <ul className="space-y-0.5 text-[11px] text-gray-600 dark:text-gray-300">
+            <li>Potholes (active): <span className="font-semibold">{byTypeCount("pothole")}</span></li>
+            <li>Waterlogging (active): <span className="font-semibold">{byTypeCount("waterlogging")}</span></li>
+            <li>Verified hazards: <span className="font-semibold">{verifiedCount}</span></li>
+            <li>
+              Recently fixed:{" "}
+              {recentFixed.length === 0 ? (
+                <span className="text-gray-400">none yet</span>
+              ) : (
+                recentFixed
+                  .map(
+                    (r) =>
+                      `${hazardTypeMeta(r.type).label} (${new Date(r.reviewedAt || r.createdAt).toLocaleDateString()})`
+                  )
+                  .join(", ")
+              )}
+            </li>
+          </ul>
+        </div>
       </div>
 
       {/* Trend */}
