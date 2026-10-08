@@ -1,10 +1,11 @@
-# STARS — Intelligent Road Safety Decision Support System
+# STARS — Smart Traffic and Road Safety Assistant
 
-**Smarter travel, safer roads.** STARS is a route-finding application that treats
-road safety as a first-class routing concern: it generates multiple routes,
-analyzes real conditions along each one (traffic, potholes, weather, incidents,
-road condition, time of day), scores them with an explainable model, and
-recommends the safest practical route — with plain-language reasons why.
+**Smarter travel, safer roads.** STARS is an AI/ML-ready road-safety navigation
+and infrastructure-intelligence platform: it generates multiple routes,
+analyzes real conditions along each one (traffic, potholes, weather,
+incidents, road condition, time of day), scores them with an explainable
+model, and recommends the safest practical route — with plain-language
+reasons why.
 
 Built with React + Vite. Runs entirely in the browser; no backend required.
 
@@ -21,34 +22,76 @@ crowdsourced hazard intelligence:
   unavailable factors are excluded, never guessed.
 - **Crowdsourced hazard reports** (potholes, waterlogging, debris, closures…)
   with clustering, confidence scoring, and a full admin review lifecycle.
+- **Infrastructure intelligence**: road-health indexing, change detection,
+  municipal repair-priority ranking, and a municipal dashboard built from the
+  same stored reports.
 - **Evidence everywhere**: every score, badge, and recommendation shows which
   factors produced it, how many were available, and how confident the system is.
 
 Everything runs client-side. Optional keys unlock weather and external incident
 feeds; without them the app degrades honestly instead of inventing data.
 
-## 2. Key Features
+## 2. Problem Statement
+
+Road-safety decisions are usually made on time alone: navigation apps optimize
+for the fastest or shortest path, while the actual condition of the road —
+potholes, waterlogging, accidents, poor lighting, unverified hazards — is left
+to the driver's local knowledge. At the same time, municipal authorities lack a
+consolidated, evidence-based view of where road problems are concentrated, so
+repairs are prioritized by anecdote rather than by data.
+
+The result is a double gap: travelers cannot ask *"which route is safer, and
+how much longer will it take?"*, and authorities cannot ask *"which roads
+should we fix first?"* — even though both answers should be derivable from the
+same hazard data.
+
+## 3. Objectives
+
+1. Turn STARS from a simple navigation app into an **intelligent road-safety
+   decision-support system** that answers which route is safer, how much longer
+   it takes, and why it is recommended.
+2. Score routes with a **centralized, explainable safety engine** whose weights
+   are configurable and whose inputs are never fabricated when data is missing.
+3. Add **predictive (rule-based) risk estimates** for the next 15–60 minutes,
+   clearly labeled as estimates rather than AI predictions.
+4. Build **crowdsourced hazard intelligence** — reporting, clustering,
+   verification lifecycle, and confidence — that improves with more users while
+   never auto-verifying crowdsourced data.
+5. Provide **infrastructure-facing analytics**: road-health index, condition
+   change detection, repair priority, and a municipal dashboard.
+6. Keep the architecture **modular** (UI / navigation / analysis / safety /
+   prediction / storage / API layers) so a real ML model or backend can be
+   plugged in later without rewrites.
+7. Preserve everything that already worked: Mapbox navigation, weather,
+   traffic, pothole reporting, route comparison, admin moderation.
+
+## 4. Key Features
 
 - **Navigation**: geocoded source/destination search, map picking, mid-route
   stops, turn-by-turn steps, full-screen map, live traffic coloring.
-- **Safety intelligence**: weighted safety scores, risk bands, route
-  recommendation with a "Why this route?" list, per-factor confidence and
-  evidence-coverage indicators.
-- **Prediction**: 15/30/60-minute forward risk estimates and what-if scenario
-  comparison, both rule-based and clearly labeled as estimates.
+- **Safety intelligence**: weighted safety scores, risk bands, multi-route
+  comparison table, safety-vs-time optimization modes, route recommendation
+  with a "Why this route?" list, per-factor confidence and evidence coverage.
+- **Prediction**: 15/30/60-minute forward risk estimates (rule-based,
+  labeled *Predictive estimate*) and what-if scenario comparison (labeled
+  *Scenario Simulation*).
+- **Segment & infrastructure risk**: per-segment risk strip and map layer,
+  road-health index, road-condition change detection, repair-priority ranking,
+  municipal dashboard with filters.
 - **Hazard intelligence**: photo → EXIF/OCR coordinate reporting, duplicate
-  clustering, safety heatmap, ranked hotspot zones, ahead-of-route alerts.
+  clustering, safety heatmap, ranked hotspot zones, ahead-of-route alerts,
+  multi-user aggregation through a repository abstraction.
 - **Admin & municipal tools**: verification worklist, fix-proof review,
-  rejection reasons, repair-priority ranking, road-change detection, municipal
-  summary dashboard.
-- **Condition modes**: night safety, waterlogging/flood risk, road-health
-  index, emergency-services lookup.
+  rejection reasons with messaging, status lifecycle, priority sorting.
+- **Condition modes**: night safety, waterlogging/flood risk, emergency mode,
+  nearby emergency-services lookup.
 - **Trips & analytics**: automatic trip recording with safety scores, trip
   history panel, aggregate safety analytics derived only from stored data.
 - **Quality**: responsive layout, screen-reader announcements, keyboard Escape
-  handling, error boundary, bounded network retries, tree-shaken lazy chunks.
+  handling, app-level error boundary, bounded network retries, tree-shaken
+  lazy chunks.
 
-## 3. System Architecture
+## 5. System Architecture
 
 STARS is a single-page React application with a layered, feature-oriented
 architecture:
@@ -64,6 +107,22 @@ External APIs     Mapbox (tiles/directions), OpenWeather, Nominatim,
                   optional GeoJSON incident feed, Overpass (emergency)
 ```
 
+Feature folders pair each domain's pure logic with its panels:
+
+```
+src/features/routing/         route analysis, preferences, segments,
+                              recommendation, what-if
+src/features/safety/          safety score, prediction, confidence,
+                              explainability, hotspots, heatmap, alerts
+src/features/road-conditions/ waterlogging, night safety, road health,
+                              change detection
+src/features/community/       crowdsourcing, trip history, analytics
+src/features/admin/           hazard lifecycle, repair priority,
+                              municipal summary
+src/features/emergency/       emergency mode + services
+src/features/map/             layer control groups + layers popover
+```
+
 Key principles, enforced by tests:
 
 - **Pure logic lives in `features/` modules** — scoring, analysis, clustering,
@@ -73,7 +132,7 @@ Key principles, enforced by tests:
 - **All network access goes through one resilient client** (`httpClient.js`)
   with timeouts, bounded retries, and a short TTL cache.
 
-## 4. Technology Stack
+## 6. Technology Stack
 
 | Layer | Choice |
 | --- | --- |
@@ -87,47 +146,185 @@ Key principles, enforced by tests:
 
 No other runtime dependencies are used.
 
-## 5. Project Structure
+## 7. Safety Scoring
 
-```
-src/
-├── App.jsx                   # main application (composition + map wiring)
-├── main.jsx                  # entry; wraps <App/> in an ErrorBoundary
-├── components/
-│   └── ErrorBoundary.jsx     # app-shell crash fallback (retry / reload)
-├── features/                 # feature folders: logic + its panels together
-│   ├── routing/              # geo, route analysis/preferences, segments,
-│   │                         #   recommendation, what-if + 4 panels
-│   ├── safety/               # safety score, prediction, confidence,
-│   │                         #   explainability, hotspots, heatmap, alerts
-│   │                         #   + 4 components
-│   ├── road-conditions/      # waterlogging, night safety, road health,
-│   │                         #   change detection + 4 panels
-│   ├── community/            # crowdsourcing, trip history, analytics
-│   │                         #   + Trips/Analytics panels
-│   ├── admin/                # hazard lifecycle, repair priority,
-│   │                         #   municipal summary + 2 panels
-│   ├── emergency/            # emergency mode/services + panel
-│   └── map/                  # layer control groups + layers popover
-├── hooks/                    # useHazardAlerts, useTripHistory
-├── services/                 # httpClient, backend repository, incident
-│                             #   service, hazard service, voice, detection
-└── assets/                   # icons (SVG markers)
-tests/                        # regression suites t21–t29 + npm test runner
-docs/                         # architecture baseline notes
-```
+The scoring engine (`features/safety/safetyScore.js`) is the core of the
+system:
 
-## 6. Getting Started
+- Seven weighted factors: **traffic (0.22), pothole exposure (0.26), weather
+  (0.16), incidents (0.12), accidents (0.14), time of day (0.10), road
+  condition (0.14)**. Weights are configurable and renormalized at scoring time
+  so they always sum to 1 over the factors actually used.
+- Each factor returns a 0–100 risk or `null`. The score is a weighted average
+  **over available factors only** — missing data never inflates or penalizes a
+  route.
+- **Bands**: 90–100 Very Safe · 75–89 Safe · 60–74 Moderate · 40–59 Risky ·
+  0–39 High Risk.
+- **Confidence & evidence**: `assessFactorConfidence()` bands the result
+  (Insufficient / Low / Medium / High), caps coverage-poor results, marks
+  estimated inputs with ⚠, and reports an evidence-coverage percentage. The UI
+  surfaces this next to every score ("Confidence: Medium (5/7 factors)",
+  "Evidence base: N stored reports"). Score and confidence are always shown as
+  two different concepts.
+- Time-aware modifiers cover weekday rush hour and weekend late nights, and the
+  engine suggests the safest travel window for the day.
+- Only *active* hazards influence scoring; `fixed` and `rejected` reports are
+  display-only.
+
+## 8. Incident Intelligence
+
+- Structured incident types: congestion, accident, hazard, construction,
+  closure, lane restriction, and other — normalized from the external feed.
+- Per-incident **severity, recency, distance from route, and route impact**
+  feed an incident-risk factor in the safety engine; accident risk is tracked
+  separately so "accidents" never double-count generic incidents.
+- When no incident feed is configured (`VITE_INCIDENTS_URL` unset), the
+  incident and accident factors are reported as **unavailable and excluded**
+  from the weighted score — the app never fabricates accident statistics.
+- Live congestion overlay on the map derives from the same traffic source used
+  for routing, and route-level traffic falls back to a step-speed estimate
+  (marked *estimated*, which caps confidence at Medium).
+
+## 9. Predictive Safety
+
+- **Forward risk estimates at 15, 30, and 60 minutes** blend current
+  conditions, the time-of-day profile at the target hour, and (when available)
+  forecast weather — with missing inputs excluded rather than guessed.
+- Every result is labeled **Predictive estimate** and carries a confidence
+  band with evidence reasons ("✓ Weather forecast applied", "⚠ No historical
+  data for this location").
+- **Rule-based, not ML**: the shipped prediction engine is a transparent
+  deterministic model. It does not claim AI/ML inference; a real model can be
+  integrated later behind the same interface.
+- **Explanation cards** (`explainability.js`) describe, in plain language, how
+  a score or prediction was produced — which factors moved it and what
+  evidence backs it — using real engine weights and contributions, never
+  invented feature-importance percentages.
+- The Predictive Safety panel shows current vs 15/30/60-minute estimates with
+  score, risk level, confidence, and contributing factors.
+
+## 10. AI Pothole Detection
+
+- An extensible detector interface: `registerPotholeDetector()` accepts any
+  detector (YOLO, ONNX Runtime, TensorFlow.js, or a remote inference API) that
+  follows the `detectPotholes(image)` contract and returns structured
+  detections (bounding box, confidence, severity).
+- **The app ships no trained model.** The bundled detector is an explicit
+  rule-based stub that always returns `available: false` with zero
+  detections — it never fabricates a detection, and results are only trusted
+  when a detector declares `kind: "ai"`.
+- The image workflow is independent of the model: photo → validation → EXIF
+  GPS extraction → (optional) detector → OCR coordinate fallback → manual
+  confirmation → severity → confidence → report.
+- **Location confidence and detection confidence are separate dimensions**,
+  each shown with its own badge (GPS/EXIF High, OCR/map-pick Medium, none Low).
+- Manual reporting always remains available when no model is configured.
+
+## 11. Road Segment Risk
+
+- Route geometry is split into contiguous segments (~500 m target, 4–12 per
+  route), each scored from hazards, incidents, weather samples, congestion and
+  route traffic within its corridor.
+- Each segment gets a 0–100 score and a band — **Safe / Moderate / Risky /
+  High Risk** — shown as a risk strip under the route cards and clickable for
+  detail.
+- The **Road Risk map layer** draws segments in their band colors and can be
+  toggled alongside Traffic, Weather, Potholes, Incidents, Hazard markers and
+  the Safety heatmap from the grouped map-layers control.
+- A `null`/unknown segment score falls back to the worst band rather than an
+  optimistic guess.
+
+## 12. Road Health Index
+
+- A long-term 0–100 index per stored-report area derived from pothole density,
+  verified hazards, repeated reports, repair status and road-condition reports
+  — separate from short-term navigation safety.
+- **Bands**: Good (80+) · Fair (60+) · Poor (40+) · Critical (0+), plus
+  *Insufficient Data* when there is no usable evidence — an empty database
+  never yields "perfect roads".
+- **Change detection** compares the live report database with stored daily
+  baselines and classifies conditions as improving / stable / deteriorating,
+  with an insufficient-history guard (a baseline younger than one hour is not
+  history). Missing report IDs fall back to count-based deltas and say so.
+- The comparison is labeled **Report-based comparison** everywhere it appears.
+
+## 13. Municipal Intelligence
+
+- **Repair-priority engine**: ranks hazards from severity, verified report
+  count, road health, recurrence, age and waterlogging exposure into
+  **Urgent / High / Medium / Low** bands with human-readable reasons — labeled
+  *Report-based priority* and never presented as official statistics.
+- **Municipal dashboard** (admin-only) aggregates the stored reports into: KPI
+  cards, active hazards by type, lifecycle queue, top repair priorities,
+  critical roads, road-condition change, road health, waterlogging/pothole/
+  verified/recently-fixed counts, and a trend summary.
+- **Filters**: date, severity, hazard type, status, priority, and location
+  (coordinate-grid areas derived from stored reports — no invented place
+  names). All KPIs and sections reflect the same filtered set.
+- The dashboard is permanently labeled **Report-based summary** — it is not
+  connected to any municipal system, not official statistics, and not a
+  prediction.
+
+## 14. Waterlogging Risk
+
+- Rainfall-driven standing-water risk along the route: 0 mm → 0, ≤2.5 mm →
+  light, ≤10 mm → moderate, ≤30 mm → heavy, >30 mm → extreme (cloudburst-level),
+  banded **Low / Moderate / High / Severe**.
+- Inputs are whatever is genuinely available: current weather along the route,
+  forecast rainfall when an OpenWeather key is configured, and stored
+  waterlogging reports near the route (fixed reports excluded — they no longer
+  pose a risk).
+- Labeled **Predictive estimate**; with no rainfall data the panel says
+  insufficient data rather than inventing a flood forecast. Confirmed
+  waterlogging reports are shown separately from predicted risk.
+
+## 15. What-if Simulation
+
+- Scenario modes: all active hazards, high & critical only, potholes only,
+  waterlogging only, other road conditions — plus traffic/weather adjustments
+  in the simulation panel.
+- The simulation recomputes road health and route safety **before vs after**
+  the hypothetical repairs and shows the delta, what would remain, and which
+  factors were held unchanged at baseline.
+- Every run is labeled **Scenario Simulation** with an explicit warning that
+  it is hypothetical only — not an achieved or scheduled improvement, and not
+  live forecasting.
+
+## 16. Personalized Routing
+
+- Three recommendation policies: **Safety First** (70% safety / 30% time),
+  **Balanced** (50/50), **Time First** (30% safety / 70% time). Switching the
+  mode re-ranks the recommendation while keeping every alternative visible.
+- Optional avoidance preferences (unpaved roads, tolls) map to Mapbox
+  `exclude` parameters with graceful degradation: if the profile rejects the
+  exclusion, routes are re-fetched without it and the user is told.
+- Preferences persist in `localStorage`; invalid stored values fall back to
+  Balanced defaults instead of breaking the app.
+
+## 17. Emergency Mode
+
+- **Emergency mode** prioritizes practical routing: travel time, major
+  closures, severe hazards and traffic are emphasized for urgent travel.
+- **Nearby emergency services** (hospitals, police, fire stations, fuel
+  stations) are looked up from OpenStreetMap via the Overpass API — real
+  locations only, with map markers, details and navigation. When Overpass is
+  unreachable the panel reports the failure honestly.
+- The feature states its limitations plainly: STARS is **not integrated with
+  any emergency dispatch system**, and no emergency-service location is ever
+  fabricated.
+
+## 18. Installation
 
 Prerequisites: **Node.js 18+** and npm.
 
 ```bash
+git clone https://github.com/deepak251817-collab/Enhanced-Road-Safety-Navigation
+cd Enhanced-Road-Safety-Navigation
 npm install
 cp .env.example .env   # then fill in your keys (see Environment Variables)
-npm run dev            # http://localhost:5173
 ```
 
-## 7. Environment Variables
+## 19. Environment Variables
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
@@ -143,7 +340,7 @@ npm run dev            # http://localhost:5173
 > fresh key in `.env` (git-ignored). Only the credential-free `.env.example`
 > is tracked by git.
 
-## 8. Running & Building
+## 20. Running the Application
 
 ```bash
 npm run dev       # development server with HMR (http://localhost:5173)
@@ -155,7 +352,7 @@ The build splits heavy vendors into cached chunks (`vendor-mapbox`,
 `vendor-react`, `vendor-charts`, `vendor-ocr`); the chart library and three
 heavy panels load only when opened.
 
-## 9. Testing & Verification
+## 21. Testing
 
 ```bash
 npm test          # runs every suite in tests/ (dependency-free runner)
@@ -172,197 +369,81 @@ npm test          # runs every suite in tests/ (dependency-free runner)
   chart loading, memoized panels, stable handlers).
 - **Suites t28–t29** assert error-handling guards (error boundary wiring, no
   unguarded promise chains) and accessibility/responsive invariants (Escape
-  handling, live regions, busy state, layout breakpoints).
+  handling, live regions, busy state, layout breakpoints, map resize sync).
+- **Suites t33–t35** cover security invariants (no secrets, escaped popup
+  HTML), the municipal dashboard engine, and a comprehensive 25-test
+  workflow sweep across navigation, safety, prediction, hazards,
+  intelligence, administration and service-failure resilience.
 - `npm run build` passes for every change, and browser verification covers
   app mount, console cleanliness, route search, and the interactive panels.
 
-## 10. Safety Scoring Engine
+## 22. Project Structure
 
-The scoring engine (`features/safety/safetyScore.js`) is the core of the
-system:
+```
+src/
+├── App.jsx                   # main application (composition + map wiring)
+├── main.jsx                  # entry; wraps <App/> in an ErrorBoundary
+├── components/
+│   └── ErrorBoundary.jsx     # app-shell crash fallback (retry / reload)
+├── features/                 # feature folders: logic + its panels together
+│   ├── routing/              # geo, route analysis/preferences, segments,
+│   │                         #   recommendation, what-if + panels
+│   ├── safety/               # safety score, prediction, confidence,
+│   │                         #   explainability, hotspots, heatmap, alerts
+│   ├── road-conditions/      # waterlogging, night safety, road health,
+│   │                         #   change detection + panels
+│   ├── community/            # crowdsourcing, trip history, analytics
+│   ├── admin/                # hazard lifecycle, repair priority,
+│   │                         #   municipal summary + panels
+│   ├── emergency/            # emergency mode/services + panel
+│   └── map/                  # layer control groups + layers popover
+├── hooks/                    # useHazardAlerts, useTripHistory
+├── services/                 # httpClient, backend repository, incident
+│                             #   service, hazard service, voice, detection
+└── assets/                   # icons (SVG markers)
+tests/                        # regression suites + npm test runner
+docs/                         # architecture baseline & security audit notes
+```
 
-- Seven weighted factors: **traffic (0.22), pothole exposure (0.26), weather
-  (0.16), incidents (0.12), accidents (0.14), time of day (0.10), road
-  condition (0.14)**. Weights are renormalized at scoring time so they always
-  sum to 1 over the factors actually used.
-- Each factor returns a 0–100 risk or `null`. The score is a weighted average
-  **over available factors only** — missing data never inflates or penalizes a
-  route.
-- **Confidence & evidence**: `assessFactorConfidence()` bands the result
-  (Insufficient / Low / Medium / High), caps coverage-poor results, marks
-  estimated inputs with ⚠, and reports an evidence-coverage percentage. The UI
-  surfaces this next to every score ("Confidence: Medium (5/7 factors)",
-  "Evidence base: N stored reports").
-- Time-aware modifiers cover weekday rush hour and weekend late nights, and the
-  engine suggests the safest travel window for the day.
-- Risk bands: Very Safe / Safe / Moderate / Risky / High Risk.
-- Only *active* hazards influence scoring; `fixed` and `rejected` reports are
-  display-only.
+## 23. Limitations
 
-## 11. Route Intelligence & Recommendation
-
-- `analyzeRoute()` produces a per-route record: safety score, segment-level
-  risk strip, traffic/congestion state, weather samples, incident list, and
-  the factor breakdown behind the score.
-- `recommendRoute()` picks the safest practical alternative within a
-  travel-time tolerance and builds a "Why this route?" list **only from real
-  metric differences** between the candidates.
-- Route preferences (avoid ferries/tolls/unpaved, etc.) map to Mapbox
-  `exclude` parameters with graceful degradation: if the profile rejects the
-  exclusion, routes are re-fetched without it and the user is told.
-- Live traffic and pothole proximity are pulled per alternative so every
-  route gets the same depth of analysis.
-
-## 12. Predictive & Explainable Safety
-
-- **Forward risk estimates** at 15, 30, and 60 minutes blend current
-  conditions, the historical hour profile, and (when available) forecast
-  weather — clearly labeled *Predictive estimate*, with missing inputs
-  excluded rather than guessed.
-- **What-if mode** re-runs the analysis under changed conditions (e.g. worse
-  weather, different time) and shows before/after deltas.
-- **Explanation cards** (`explainability.js`) describe, in plain language, how
-  a score or prediction was produced — which factors moved it, which engine
-  produced the result, and what evidence backs it. Nothing is presented as an
-  opaque AI verdict: the shipped prediction is a transparent rule-based model
-  and says so.
-
-## 13. Hazard Reporting & Crowdsourcing
-
-- Report potholes, broken roads, waterlogging, fallen trees, debris, damaged
-  dividers, signal problems, construction, closures, poor visibility, and
-  other hazards — optionally with a photo.
-- **Coordinate provenance**: photo EXIF GPS → live GPS fallback → OCR
-  extraction, with a transparent confidence badge (count, verification, photo,
-  location provenance, recency) and an assistive detection interface. The
-  shipped detector is a rule-based stub that never fabricates AI results;
-  trained models plug in via `registerPotholeDetector()`.
-- **Duplicate clustering**: nearby reports merge into one pin with an
-  evidence line (N reports in zone, M active).
-- **Multi-user ready**: the data layer is a repository abstraction
-  (`backend.js`) with `local` and `http` kinds — set `VITE_API_BASE_URL` to
-  share reports across users, or stay fully local. Admin↔user messaging
-  (admin notes, delete/fix requests) works either way.
-- Distance-from-route filtering keeps alerts relevant: hazards are matched to
-  each route within a threshold and surfaced ahead of your position.
-
-## 14. Hazard Lifecycle & Admin Console
-
-- Canonical lifecycle: `reported → under-review → verified →
-  repair-requested → fixed`, plus `rejected` — legacy statuses migrate on
-  load, and transitions are validated (illegal jumps are rejected).
-- **Admin console** (PIN-gated, default `1234` — change it before real use):
-  worklist with status summary and filter tabs, fix-proof photo review,
-  rejection with reason, per-status transitions, priority sorting, and an
-  undo window on deletions.
-- **Municipal dashboard**: aggregates stored reports into repair priority
-  bands, road-health grades, change-detection diffs against daily baselines,
-  and a summary of what needs attention.
-- Fixed hazards stay visible on demand but stop affecting safety scores and
-  the heatmap.
-
-## 15. Emergency & Road-Condition Modes
-
-- **Emergency mode**: one tap to find nearby hospitals/police/fire stations
-  (Overpass/OSM) and call-friendly contacts, with route context attached.
-- **Night safety**: darkness-aware risk using time-of-day profiles and
-  lighting-related factors, with a safest-window suggestion.
-- **Waterlogging / flood**: rainfall-aware standing-water risk along the route
-  (uses the weather factor when a key is configured).
-- **Road health**: a composite index (0–100) with letter grades from stored
-  reports and change history.
-- All condition panels follow the same honesty rule: when inputs are missing
-  they say *insufficient data* instead of rendering a made-up number.
-
-## 16. Voice, Alerts & Notifications
-
-- **Voice guidance** (off by default): maneuver announcements and spoken
-  safety warnings via browser speech synthesis, deduplicated per hazard.
-- **Hazard alert stack**: ahead-of-route warnings projected onto your
-  position, capped and throttled, announced through an `aria-live="assertive"`
-  region.
-- **Browser notifications** for nearby user-reported hazards (permission
-  requested in context; failures are swallowed, never thrown).
-- **Admin messages**: in-app inbox for review outcomes, deletion requests,
-  and fix proofs, with an unread badge.
-
-## 17. Data & Privacy
-
-Everything is stored **locally in your browser** (`localStorage`). Nothing is
-uploaded anywhere unless you explicitly configure `VITE_API_BASE_URL`.
-Clearing site data resets the app.
-
-| Key | Contents |
-| --- | --- |
-| `userPotholeReports` | hazard reports (photos stored inline) |
-| `tripHistory` | completed trips with safety scores |
-| `adminMessages` | admin↔user messages and review outcomes |
-| `roadChangeSnapshots` | daily road-change baselines |
-| `routePreferences` | routing avoidance preferences |
-| `starsUsers`, `starsPredictions` | multi-user / prediction caches (when enabled) |
-| `showFixed`, `showOnlyUnverified` | admin view toggles |
-| `voiceNavigationEnabled`, `voiceSafetyEnabled` | voice settings |
-
-All reads are defensive: corrupt or missing JSON falls back to safe defaults
-rather than crashing the app.
-
-## 18. Performance & Resilience
-
-- **Chunked builds**: heavy vendors split into cacheable chunks; the chart
-  library (Recharts) and three heavy panels (Analytics, Predictive, Traffic
-  chart) are `React.lazy` — the initial bundle never pays for them.
-- **Memoization**: heavy panels are wrapped in `React.memo`, hot-path
-  handlers are `useCallback`-stable, and expensive derivations are `useMemo`ed.
-- **One resilient HTTP client**: every request has a timeout, bounded retries
-  (server errors and network only — never 4xx), exponential backoff, and a
-  short TTL cache that is Nominatim-friendly.
-- **Error boundary**: any render crash shows a friendly fallback with
-  *Try again* / *Reload app* instead of a blank page.
-- **Guarded promises**: every async chain in the app resolves to a safe
-  fallback (no unhandled rejections), and the route-error banner clears on the
-  next attempt.
-
-## 19. Accessibility & Responsiveness
-
-- Skip-to-content link, visible `:focus-visible` outlines, labeled inputs,
-  dialog semantics (`role="dialog"`, `aria-modal`), and grouped map-layer
-  controls with `role="group"` labels.
-- **Screen-reader announcements**: a polite live region narrates route search
-  progress and results ("Finding routes…" → "2 routes found"); the notice
-  banner is `role="status"` and errors are `role="alert"`.
-- **Keyboard**: `Escape` closes the topmost dialog/popover or cancels map
-  picking; the Find Routes button exposes `aria-busy` while searching.
-- **Motion**: `prefers-reduced-motion` disables animations.
-- **Responsive**: single-column layout on phones with zero horizontal
-  overflow; the map canvas re-syncs its size on viewport resize/rotation.
-
-## 20. Troubleshooting & Known Limitations
-
-**Troubleshooting**
-
-- *Blank map*: check that `VITE_MAPBOX_TOKEN` is set in `.env` and restart
-  the dev server.
-- *Weather factor missing*: `VITE_OPENWEATHER_KEY` unset or over quota — the
-  score will show weather as unavailable rather than guessing.
-- *No routes found*: verify both points are on/near drivable roads; route
-  exclusions in Preferences are retried automatically, but very remote pairs
-  can genuinely have no route.
-- *Stale data after a big change*: clear site data — all state is local.
-
-**Known limitations**
-
-- The pothole detector ships as a rule-based stub behind a real interface;
-  plug in a trained model via `registerPotholeDetector()` (results are only
-  trusted when the detector declares `kind: "ai"`).
+- **No trained ML model ships with the app.** The pothole detector is a
+  rule-based stub behind a real interface; plug in a trained model via
+  `registerPotholeDetector()` (results are only trusted when the detector
+  declares `kind: "ai"`). Predictions are rule-based estimates, not AI output.
 - OCR coordinate extraction is heuristic — EXIF and live GPS are preferred.
 - External APIs (Nominatim, Mapbox, OpenWeather, Overpass, optional incident
-  feed) need network access and, where listed, valid keys.
+  feed) need network access and, where listed, valid keys; when they fail the
+  dependent factor is reported as unavailable.
 - Multi-user sharing requires you to host your own backend
   (`VITE_API_BASE_URL`); none is bundled.
+- All data is local to the browser; clearing site data resets reports, trips
+  and baselines.
+- The municipal dashboard aggregates only the reports stored in the browser —
+  it is not an official municipal system.
+- Historical API keys in git history must be rotated operationally; deleting
+  them from the latest commit is not sufficient.
 
-## 21. Team & Credits
+## 24. Future Scope
 
-**Team:** Deepak R · Yashaswini M
+- **Real ML integration**: train/serve a pothole-damage model behind the
+  existing detector interface, and add a learned risk model behind the
+  prediction interface — with genuine feature-importance surfaced through the
+  explainability layer.
+- **Shared backend**: deploy the API-backed repository (users, hazards,
+  trips, verifications) so crowdsourced reports aggregate across a city
+  instead of one browser.
+- **More live data**: official incident feeds, municipal waterlogging
+  sensors, and road-work schedules as additional honest factor sources.
+- **Segment-level history**: persist per-segment scores over time to feed
+  long-term road-health trend analysis beyond daily report baselines.
+- **Accessibility depth**: full keyboard map navigation and richer
+  screen-reader route walkthroughs.
+
+## 25. Team
+
+**Deepak R**
+**Yashaswini M**
 
 Built with React, Vite, Tailwind CSS, Mapbox GL JS, Recharts, lucide-react,
 exifr, and tesseract.js. Map data © OpenStreetMap contributors; geocoding by
