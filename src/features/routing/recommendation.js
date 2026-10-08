@@ -1,22 +1,27 @@
 /**
  * Safety-aware route recommendation.
  *
- * Chooses the safest *practical* route: a route that is moderately slower but
- * substantially safer can win, while a route that is only marginally safer but
- * much slower is rejected by the travel-time tolerance rules. Purely
- * deterministic — no randomness, no fabricated inputs.
+ * Chooses a route by blending safety and travel time with configurable
+ * per-mode weights (Safety First 70/30, Balanced 50/50, Time First 30/70):
+ * a slower-but-safer route wins exactly when the weighted blend says so.
+ * Purely deterministic — no randomness, no fabricated inputs.
  */
 
-/** Configurable recommendation policy. */
+/**
+ * Safety-vs-time decision weights per priority mode (spec: Safety First
+ * 70% safety / 30% time, Balanced 50/50, Time First 30% safety / 70% time).
+ * The time weight applies to a normalized travel-time score where the
+ * fastest route = 100 and slower routes score proportionally less.
+ */
+export const PRIORITY_WEIGHTS = {
+  safest: { safety: 0.7, time: 0.3 },
+  balanced: { safety: 0.5, time: 0.5 },
+  fastest: { safety: 0.3, time: 0.7 },
+};
+
+/** Configurable recommendation policy (defaults to Balanced 50/50). */
 export const DEFAULT_RECOMMENDATION_CONFIG = {
-  /** Max extra travel time (vs fastest) for a "normal" detour. */
-  timeTolerancePct: 25,
-  /** Safety-score advantage required to accept a normal detour. */
-  minSafetyAdvantage: 5,
-  /** Larger detours need a much stronger safety argument. */
-  strongSafetyAdvantage: 15,
-  /** Never accept a route slower than this % vs the fastest route. */
-  hardTimeCapPct: 40,
+  weights: { safety: 0.5, time: 0.5 },
 };
 
 /**
@@ -39,38 +44,33 @@ export function recommendRoute(analyses, config = {}) {
 
   const fastest = list.reduce((m, a) => (a.durationSeconds < m.durationSeconds ? a : m), list[0]);
 
+  const w = {
+    safety: Number.isFinite(cfg.weights?.safety) ? cfg.weights.safety : 0.5,
+    time: Number.isFinite(cfg.weights?.time) ? cfg.weights.time : 0.5,
+  };
+
+  // Weighted decision: blended = w.safety * safetyScore + w.time * timeScore,
+  // where the fastest route scores 100 on time and slower routes score in
+  // proportion to their duration. Deterministic; ties break on duration.
   let best = null;
+  let bestBlend = -Infinity;
   for (const a of list) {
-    const timeDeltaPct =
-      fastest.durationSeconds > 0
-        ? ((a.durationSeconds - fastest.durationSeconds) / fastest.durationSeconds) * 100
-        : 0;
-    const safetyAdvantage = a.score - fastest.score;
-
-    let eligible;
-    if (a.index === fastest.index) {
-      eligible = true;
-    } else if (timeDeltaPct > cfg.hardTimeCapPct) {
-      // Dramatically slower routes are never auto-preferred.
-      eligible = false;
-    } else if (timeDeltaPct <= cfg.timeTolerancePct) {
-      eligible = safetyAdvantage >= cfg.minSafetyAdvantage;
-    } else {
-      // Beyond normal tolerance: only a significant safety gain justifies it.
-      eligible = safetyAdvantage >= cfg.strongSafetyAdvantage;
-    }
-    if (!eligible) continue;
-
+    const timeScore =
+      a.durationSeconds > 0 && fastest.durationSeconds > 0
+        ? Math.min(100, (fastest.durationSeconds / a.durationSeconds) * 100)
+        : 100;
+    const blend = w.safety * a.score + w.time * timeScore;
     if (
       !best ||
-      a.score > best.score ||
-      (a.score === best.score && a.durationSeconds < best.durationSeconds)
+      blend > bestBlend ||
+      (blend === bestBlend && a.durationSeconds < best.durationSeconds)
     ) {
       best = a;
+      bestBlend = blend;
     }
   }
 
-  // Fallback: nothing eligible (single route, etc.) → fastest route.
+  // Fallback (single route, etc.): the fastest route.
   const winner = best || fastest;
   const timeDeltaPct =
     fastest.durationSeconds > 0

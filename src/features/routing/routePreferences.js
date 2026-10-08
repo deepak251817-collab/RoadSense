@@ -19,7 +19,7 @@
  * documented policy constant or a real API parameter.
  */
 import {
-  DEFAULT_RECOMMENDATION_CONFIG,
+  PRIORITY_WEIGHTS,
 } from "./recommendation";
 
 /** localStorage key for the user's route preferences. */
@@ -30,9 +30,9 @@ export const ROUTE_PREFERENCES_LABEL = "Route preferences";
 
 /** Supported route priorities (recommendation policy). */
 export const ROUTE_PRIORITIES = [
-  { key: "safest", label: "Safety first" },
+  { key: "safest", label: "Safety First" },
   { key: "balanced", label: "Balanced" },
-  { key: "fastest", label: "Fastest first" },
+  { key: "fastest", label: "Time First" },
 ];
 
 /** Default preference state. */
@@ -43,37 +43,21 @@ export const DEFAULT_ROUTE_PREFERENCES = {
 };
 
 /**
- * Recommendation policy per priority.
+ * Weighted recommendation policy per priority (see PRIORITY_WEIGHTS):
  *
- * - balanced: the shipped defaults (a moderately slower but clearly
- *   safer route can win).
- * - safest: accept substantially larger detours for a safety gain.
- * - fastest: never divert from the fastest route (only the fastest route
- *   can be recommended; safety scores remain visible).
+ * - Safety First: 70% safety / 30% travel time.
+ * - Balanced: 50% safety / 50% travel time.
+ * - Time First: 30% safety / 70% travel time.
+ *
+ * Alternative routes are never removed — the weights only decide which
+ * route gets recommended.
  *
  * @param {string} priority one of ROUTE_PRIORITIES keys
  * @returns {Object} config for recommendRoute()
  */
 export function recommendationConfigFor(priority) {
-  if (priority === "safest") {
-    return {
-      ...DEFAULT_RECOMMENDATION_CONFIG,
-      timeTolerancePct: 60, // a big detour is acceptable…
-      minSafetyAdvantage: 3, // …for even a modest safety gain
-      strongSafetyAdvantage: 10, // …and strong gains justify near-max detours
-      hardTimeCapPct: 90,
-    };
-  }
-  if (priority === "fastest") {
-    return {
-      ...DEFAULT_RECOMMENDATION_CONFIG,
-      timeTolerancePct: 0, // no tolerance: safety never buys a detour
-      minSafetyAdvantage: 999, // unreachable → only the fastest route qualifies
-      strongSafetyAdvantage: 999,
-      hardTimeCapPct: 0,
-    };
-  }
-  return { ...DEFAULT_RECOMMENDATION_CONFIG }; // balanced
+  const weights = PRIORITY_WEIGHTS[priority] || PRIORITY_WEIGHTS.balanced;
+  return { weights: { ...weights } };
 }
 
 /**
