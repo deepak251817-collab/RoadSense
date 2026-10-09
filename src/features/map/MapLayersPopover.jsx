@@ -24,7 +24,7 @@ export default function MapLayersPopover({ open, onToggle, bbmpLoaded, groups = 
         aria-haspopup="true"
         aria-label="Map layers"
         title="Map layers"
-        className="px-3 py-2 rounded-xl text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-2 border-gray-200 dark:border-gray-700 hover:bg-white hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl transition-all duration-300"
+        className="px-3 py-2 rounded-control text-sm font-semibold bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 hover:bg-white shadow-pop transition-colors duration-150"
       >
         <Layers className="w-4 h-4" aria-hidden="true" />
       </button>

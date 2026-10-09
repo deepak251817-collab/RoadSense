@@ -3044,7 +3044,7 @@ export default function App() {
 						{adminPinError && <div id="admin-pin-error" role="alert" className="mt-2 text-xs text-red-600 dark:text-red-400">{adminPinError}</div>}
 						<div className="mt-4 flex justify-end gap-2">
 							<button type="button" onClick={() => { setAdminPinOpen(false); setAdminPinValue(''); setAdminPinError(''); }} className="px-4 py-2 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
-							<button type="submit" className="px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md">Unlock</button>
+							<button type="submit" className="px-4 py-2 text-sm font-semibold rounded-control bg-primary-600 text-white hover:bg-primary-700 transition-colors duration-150">Unlock</button>
 						</div>
 					</form>
 				</div>
@@ -3059,7 +3059,7 @@ export default function App() {
 						<textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason (optional)" className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" rows={3} />
 						<div className="mt-4 flex justify-end gap-2">
 							<button onClick={closeRejectModal} className="px-4 py-2 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
-							<button onClick={confirmRejectModal} className="px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white hover:from-red-700 hover:to-rose-700 shadow-md">Reject</button>
+							<button onClick={confirmRejectModal} className="px-4 py-2 text-sm font-semibold rounded-control bg-red-600 text-white hover:bg-red-700 transition-colors duration-150">Reject</button>
 						</div>
 					</div>
 				</div>
@@ -3073,7 +3073,7 @@ export default function App() {
 						<h3 className="text-base font-bold mb-2">Mark Pothole Fixed</h3>
 						<div className="text-xs text-gray-600 dark:text-gray-300 mb-3">Upload a geotagged photo as proof (GPS required).</div>
 						<div className="mt-1 flex items-center gap-3">
-							<button type="button" onClick={() => openCameraModal('fix')} className="px-4 py-2 text-xs font-medium rounded-xl border-2 border-indigo-300 dark:border-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 inline-flex items-center gap-2 transition-all duration-200 hover:scale-105">
+							<button type="button" onClick={() => openCameraModal('fix')} className="px-4 py-2 text-xs font-medium rounded-control border border-primary-300 dark:border-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/30 inline-flex items-center gap-2 transition-colors duration-150">
 								<Camera className="w-4 h-4" /> Use camera
 							</button>
 							<span className="text-[11px] text-gray-500">or upload from gallery</span>
@@ -3216,7 +3216,7 @@ export default function App() {
 									title="Use my location as source"
 									onClick={handleUseMyLocation}
 									type="button"
-									className="absolute right-3 top-9 text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 hover:scale-110 transition-transform duration-200 p-1 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+									className="absolute right-3 top-9 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors duration-150 p-1 rounded-control hover:bg-primary-50 dark:hover:bg-primary-900/30"
 								>
 									<LocateFixed className="w-5 h-5" />
 								</button>
@@ -3709,7 +3709,7 @@ export default function App() {
 										<button
 											key={`map-route-chip-${idx}`}
 											onClick={() => { const map = window._mapInstance; if (map) selectRouteById(map, routes, idx); }}
-											className={`text-left px-4 py-2.5 rounded-xl text-xs font-semibold backdrop-blur-md shadow-lg border-2 transition-all duration-300 hover:scale-105 active:scale-95 ${selected ? 'bg-gradient-to-r from-indigo-500 to-purple-500 border-white/40 ring-2 ring-white/50 text-white shadow-indigo-500/50' : 'bg-white/90 dark:bg-gray-900/80 border-gray-200 dark:border-gray-700 hover:bg-white hover:shadow-xl text-gray-900 dark:text-gray-100'}`}
+											className={`text-left px-4 py-2.5 rounded-card text-xs font-semibold backdrop-blur-md shadow-pop border-2 transition-all duration-150 ${selected ? 'bg-primary-600 border-white/40 ring-2 ring-white/50 text-white' : 'bg-white/90 dark:bg-gray-900/80 border-gray-200 dark:border-gray-700 hover:bg-white hover:shadow-xl text-gray-900 dark:text-gray-100'}`}
 										>
 											<div className="flex items-center justify-between gap-3">
 												<span className="font-bold">Route {idx + 1}</span>
@@ -3739,8 +3739,8 @@ export default function App() {
 
 				<aside className="space-y-6">
 					{routes.length > 0 && (
-						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-							<h2 className="text-base font-bold mb-4 text-gray-800 dark:text-gray-100 sticky top-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm z-10 px-1 py-1 rounded">Route Options</h2>
+						<div className="stars-card p-4 sm:p-5">
+							<h2 className="stars-h2 mb-4 sticky top-4 z-10 bg-white/90 dark:bg-gray-900/90 py-1 rounded-control">Route Options</h2>
 
 							{/* Multi-route comparison: actual per-route analysis results */}
 							{routeAnalyses.length > 1 && (
@@ -3770,11 +3770,11 @@ export default function App() {
 													</td>
 													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.durationMinutes} min</td>
 													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.distanceKm.toFixed(1)} km</td>
-													<td className="py-1 px-2 text-gray-600 dark:text-gray-400">{a.traffic.label}{a.traffic.available && a.traffic.estimated ? "*" : ""}</td>
-													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.potholes.count}{a.potholes.highCount > 0 ? ` (${a.potholes.highCount} hi)` : ""}</td>
+													<td className={`py-1 px-2 ${a.traffic.label.toLowerCase().includes("low") || a.traffic.label.toLowerCase().includes("clear") ? "text-emerald-700 dark:text-emerald-400 font-semibold" : "text-gray-600 dark:text-gray-400"}`}>{a.traffic.label}{a.traffic.available && a.traffic.estimated ? "*" : ""}</td>
+													<td className={`py-1 px-2 text-right ${a.potholes.count === Math.min(...routeAnalyses.map((x) => x.potholes.count)) ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-gray-300"}`}>{a.potholes.count}{a.potholes.highCount > 0 ? ` (${a.potholes.highCount} hi)` : ""}</td>
 													<td className="py-1 px-2 text-gray-600 dark:text-gray-400">{a.weather.available ? a.weather.label : "—"}</td>
 													<td className="py-1 px-2 text-right text-gray-700 dark:text-gray-300">{a.incidents.available ? a.incidents.count : "—"}</td>
-													<td className="py-1 pl-2 text-right font-bold" style={{ color: a.classification.color }}>{a.score}</td>
+													<td className={`py-1 px-2 text-right ${a.score === Math.max(...routeAnalyses.map((x) => x.score)) ? "text-emerald-700 dark:text-emerald-400 font-bold" : "text-gray-700 dark:text-gray-300"}`} style={a.score === Math.max(...routeAnalyses.map((x) => x.score)) ? undefined : { color: a.classification.color }}>{a.score}</td>
 												</tr>
 											))}
 										</tbody>
@@ -3827,13 +3827,13 @@ export default function App() {
 												if (map) selectRouteById(map, routes, recommendation.recommendedIndex);
 												setRecChoice("use");
 											}}
-											className="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600 shadow-md hover:scale-105 transition-all duration-200"
+											className="px-3 py-1.5 rounded-control text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors duration-150"
 										>
 											Use Recommended Route
 										</button>
 										<button
 											onClick={() => setRecChoice("keep")}
-											className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-gray-300 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-800 transition-all duration-200"
+											className="px-3 py-1.5 rounded-control text-xs font-medium border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
 										>
 											Keep Current Route
 										</button>
@@ -3855,19 +3855,19 @@ export default function App() {
 									// Count of user-uploaded potholes near this route (within ~120m)
 									const potCount = userPotholeCounts[idx] || 0;
 									return (
-										<li key={idx} className={`w-full text-sm rounded-xl px-4 py-3 border-2 relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:scale-[1.01] ${selected ? "border-indigo-400 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/20 shadow-md" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"}`} style={{ minHeight: '88px' }}>
-											<div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${selected ? "bg-gradient-to-b from-indigo-500 to-purple-500" : "bg-transparent"}`} />
+										<li key={idx} className={`w-full text-sm rounded-xl px-4 py-3 border-2 relative cursor-pointer transition-all duration-200 hover:shadow-lg ${selected ? "border-primary-400 bg-primary-50/70 dark:bg-primary-900/25 shadow-md" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"}`} style={{ minHeight: '88px' }}>
+											<div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${selected ? "bg-primary-500" : "bg-transparent"}`} />
 											<div className="flex items-center justify-between">
 												<div>
 													<div className="font-semibold flex items-center gap-2">
 														<span className="text-gray-900 dark:text-gray-100">Route {idx + 1}</span>
 													{recommendation?.recommendedIndex === idx && (
-														<span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold shadow-sm" title="Recommended safer route">RECOMMENDED</span>
+														<span className="stars-badge-ok" title="Recommended safer route">RECOMMENDED</span>
 													)}
 														{potCount > 0 && (
-															<span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-orange-400 to-red-500 text-white font-bold shadow-sm animate-pulse" title="User-reported potholes along this route">{potCount} pothole{potCount > 1 ? 's' : ''}</span>
+															<span className="stars-badge-danger animate-pulse" title="User-reported potholes along this route">{potCount} pothole{potCount > 1 ? 's' : ''}</span>
 														)}
-														{selected && <span className="text-[10px] px-2 py-1 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-sm">Primary</span>}
+														{selected && <span className="stars-badge bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-300">Primary</span>}
 													</div>
 													<div className="mt-0.5 flex items-center gap-2 text-gray-700 dark:text-gray-200">
 														<span className="text-[11px] px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium">{minutes} min</span>
@@ -3876,12 +3876,12 @@ export default function App() {
 														<span className={`text-[11px] px-2 py-1 rounded-full font-medium ${delta === 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 dark:bg-gray-700"}`}>{delta === 0 ? "Fastest" : `+${delta} min`}</span>
 													</div>
 													<div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden w-40 shadow-inner">
-														<div className={`h-full transition-all duration-300 ${selected ? "bg-gradient-to-r from-indigo-500 to-purple-500" : "bg-gradient-to-r from-emerald-400 to-teal-500"}`} style={{ width: `${rel}%` }} />
+														<div className={`h-full transition-all duration-300 ${selected ? "bg-primary-500" : "bg-emerald-500"}`} style={{ width: `${rel}%` }} />
 													</div>
 												</div>
 												<div className="mt-2 flex flex-wrap items-center gap-2">
 													<button
-														className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-sm hover:shadow-md hover:scale-105 whitespace-nowrap ${selected ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
+														className={`px-3 py-1.5 rounded-control text-xs font-semibold transition-colors duration-150 whitespace-nowrap ${selected ? "bg-primary-600 text-white" : "bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600"}`}
 														onClick={() => {
 															const map = window._mapInstance;
 															if (!map) return;
@@ -3892,7 +3892,7 @@ export default function App() {
 													</button>
 													{/* Hazards badge removed with avoidance feature */}
 													<button
-														className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-700 flex items-center gap-1 transition-all duration-200 hover:scale-105"
+														aria-expanded={String(openDetailsId) === String(idx)} className="px-3 py-1.5 rounded-control text-xs font-medium border border-blue-300 dark:border-blue-700 hover:bg-blue-50 dark:hover:bg-blue-700 flex items-center gap-1 transition-colors duration-150"
 														onClick={() => setOpenDetailsId((cur) => (String(idx) === String(cur) ? null : String(idx)))}
 													>
 														<Info className="w-3.5 h-3.5" /> Details
@@ -3900,7 +3900,7 @@ export default function App() {
 
 													{/* Potholes option removed as requested */}
 													<button
-														className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1 transition-all duration-200 hover:scale-105"
+														aria-pressed={String(openTrafficId) === String(idx)} className={`px-3 py-1.5 rounded-control text-xs font-medium border flex items-center gap-1 transition-colors duration-150 ${String(openTrafficId) === String(idx) ? "border-primary-600 bg-primary-600 text-white hover:bg-primary-700" : "border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"}`}
 														onClick={() => {
 															const newOpen = String(openTrafficId) === String(idx) ? null : String(idx);
 															setOpenTrafficId(newOpen);
@@ -3917,7 +3917,7 @@ export default function App() {
 												<Gauge className="w-3.5 h-3.5" /> Traffic
 											</button>
 											<button
-												className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 flex items-center gap-1 transition-all duration-200 hover:scale-105 whitespace-nowrap"
+												aria-pressed={String(openIncidentId) === String(idx)} className={`px-3 py-1.5 rounded-control text-xs font-medium border flex items-center gap-1 transition-colors duration-150 whitespace-nowrap ${String(openIncidentId) === String(idx) ? "border-primary-600 bg-primary-600 text-white hover:bg-primary-700" : "border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30"}`}
 												onClick={() => setOpenIncidentId((cur) => (String(idx) === String(cur) ? null : String(idx)))}
 											>
 												<AlertTriangle className="w-3.5 h-3.5" /> Incidents
@@ -3926,7 +3926,7 @@ export default function App() {
 												) : null}
 											</button>
 													<button
-														className="px-3 py-1.5 rounded-lg text-xs font-medium border-2 border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/30 flex items-center gap-1 transition-all duration-200 hover:scale-105 whitespace-nowrap"
+														aria-pressed={String(openWeatherId) === String(idx)} className={`px-3 py-1.5 rounded-control text-xs font-medium border flex items-center gap-1 transition-colors duration-150 whitespace-nowrap ${String(openWeatherId) === String(idx) ? "border-primary-600 bg-primary-600 text-white hover:bg-primary-700" : "border-sky-300 dark:border-sky-700 hover:bg-sky-50 dark:hover:bg-sky-900/30"}`}
 														onClick={() => {
 															const newOpen = String(openWeatherId) === String(idx) ? null : String(idx);
 															setOpenWeatherId(newOpen);
@@ -4192,7 +4192,7 @@ export default function App() {
 											key={opt.key}
 											type="button"
 											onClick={() => setReportForm((f) => ({ ...f, severity: opt.key }))}
-											className={`flex flex-col items-center px-3 py-2 rounded-xl border-2 text-xs font-medium transition-all duration-200 hover:scale-105 ${reportForm.severity === opt.key ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-900/40 shadow-md" : "border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
+											className={`flex flex-col items-center px-3 py-2 rounded-control border text-xs font-medium transition-colors duration-150 ${reportForm.severity === opt.key ? "border-primary-500 bg-primary-100 dark:bg-primary-900/40 shadow-card" : "border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
 										>
 											<img src={opt.icon} alt={opt.label} className="w-10 h-10 object-contain" />
 											<span>{opt.label}</span>
