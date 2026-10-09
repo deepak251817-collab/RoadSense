@@ -109,11 +109,16 @@ Mapping (actual commit messages shown verbatim):
 | 40 Final cleanup | Done (nothing obsolete found) | `docs: mark architecture baseline as a historical snapshot` |
 | 41 Final validation & release | Done | `release: v3.0.0 — intelligent road safety decision support system` |
 
-**Open gaps to close in later phases of this prompt:**
-1. Phase 38 — rewrite README to the master prompt's exact 25-section list
-   (Problem Statement, Objectives, Future Scope, etc.).
-2. Final output — produce the required 32-section STARS V3 FINAL REPORT and
-   a chronological commit list.
-3. Per-phase reports will cite actual commit messages; where the master
+**Open gaps — status (2026-10-09):**
+1. Phase 38 — README rewritten to the 25-section list (Problem
+   Statement §2, Objectives §3, Future Scope §24, …). **Closed.**
+2. Final output — 32-section STARS V3 FINAL REPORT with the chronological
+   commit list produced as `docs/STARS_V3_FINAL_REPORT.md`. **Closed.**
+3. Per-phase reports cite actual commit messages; where the master
    prompt's template wording differs from history, the actual message is
-   reported (no empty or duplicate commits will be created).
+   reported (no empty or duplicate commits were created).
+
+All functionality gaps identified during this audit were fixed in
+`971e170` (what-if scenarios, avoidance toggles, waterlogging wiring,
+t36 suite) and `c78cc05` (map teardown guard); the Part B UI/UX phases
+landed as `a5d473e`, `0ff9548`, `213dfc5`, `cf5c186`.
