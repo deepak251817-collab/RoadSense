@@ -97,7 +97,8 @@ STARS is a single-page React application with a layered, feature-oriented
 architecture:
 
 ```
-UI layer          App.jsx (composition, map wiring, state)
+UI layer          src/app/App.jsx (composition, map wiring, state)
+                  ├── src/app/sections/SectionViews.jsx (six-section shell)
                   └── src/features/*  (panels + pure logic per domain)
 Data layer        src/services/*      (HTTP client, incident feed, hazard
                   repository, voice, photo intelligence)
@@ -105,6 +106,17 @@ Persistence       browser localStorage (swap-ready repository abstraction,
                   optional HTTP backend via VITE_API_BASE_URL)
 External APIs     Mapbox (tiles/directions), OpenWeather, Nominatim,
                   optional GeoJSON incident feed, Overpass (emergency)
+```
+
+The interface is organized into six sections; every panel lives in exactly one:
+
+```
+Navigate          map, search, routes, comparison, recommendation, hazards
+Road Safety       score, factors, confidence, prediction, segment risk
+Report a Hazard   unified form (type, evidence, location, severity, tracking)
+Trips             trip history + trip analytics
+Road Intelligence road health, hotspots, changes, repair priority; Municipal (admin)
+Settings          route preferences, map/display controls, voice settings
 ```
 
 Feature folders pair each domain's pure logic with its panels:
@@ -381,8 +393,12 @@ npm test          # runs every suite in tests/ (dependency-free runner)
 
 ```
 src/
-├── App.jsx                   # main application (composition + map wiring)
 ├── main.jsx                  # entry; wraps <App/> in an ErrorBoundary
+├── index.css                 # design tokens + shared .stars-* classes
+├── app/
+│   ├── App.jsx               # main application (composition + map wiring)
+│   └── sections/
+│       └── SectionViews.jsx  # six-section interface shell
 ├── components/
 │   └── ErrorBoundary.jsx     # app-shell crash fallback (retry / reload)
 ├── features/                 # feature folders: logic + its panels together
@@ -401,8 +417,8 @@ src/
 ├── services/                 # httpClient, backend repository, incident
 │                             #   service, hazard service, voice, detection
 └── assets/                   # icons (SVG markers)
-tests/                        # regression suites + npm test runner
-docs/                         # architecture baseline & security audit notes
+tests/                        # 13 regression suites + npm test runner
+docs/                         # audits, plan, design system, phase reports
 ```
 
 ## 23. Limitations

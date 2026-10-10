@@ -94,7 +94,7 @@ let activeModel = null;
  * @returns {{name:string, version:string|null, kind:string, infer:Function|null}}
  * @throws {TypeError} when the descriptor is malformed
  */
-function registerInferenceModel(model) {
+export function registerInferenceModel(model) {
   if (!model || typeof model !== "object" || Array.isArray(model)) {
     throw new TypeError("registerInferenceModel: expected a model descriptor object");
   }
@@ -112,6 +112,11 @@ function registerInferenceModel(model) {
     infer: model.infer ?? null,
   };
   return getInferenceModel();
+}
+
+/** Unregister any model; explanations fall back to rule-based labelling. */
+export function clearInferenceModel() {
+  activeModel = null;
 }
 
 /** Copy of the registered model descriptor (null when none is registered). */
