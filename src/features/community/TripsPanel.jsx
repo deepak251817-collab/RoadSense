@@ -71,7 +71,7 @@ function TripsPanel({ show, trips = [], stats, onClear, onClose }) {
         </>
       )}
       {trips.length === 0 ? (
-        <p className="text-sm text-gray-600 dark:text-gray-300">
+        <p className="stars-empty">
           No trips yet. Select a route and it will be recorded here with its safety score.
         </p>
       ) : (

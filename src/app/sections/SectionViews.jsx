@@ -83,7 +83,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 					<div className="stars-card p-4 sm:p-6">
 						<h3 className="stars-h3 mb-3">Overall safety</h3>
 						{routeAnalyses.length === 0 ? (
-							<p className="text-sm text-gray-600 dark:text-gray-300">No routes analyzed yet. Find a route on the Navigate screen to see safety scores, risk factors and the recommendation here.</p>
+							<p className="stars-empty">No routes analyzed yet. Find a route on the Navigate screen to see safety scores, risk factors and the recommendation here.</p>
 						) : (
 							<>
 								<ul className="space-y-2" role="list">
@@ -216,8 +216,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 								if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
 							}}
 						/>
-					) : (
-						<div className="stars-card p-4 sm:p-6 text-sm text-gray-600 dark:text-gray-300">
+					) : (							<div className="stars-card p-4 sm:p-6 stars-empty">
 							Municipal repair, verification and administrative actions are available in Admin mode. Use the <span className="font-semibold">Admin</span> button in the header to sign in — they are never exposed in the ordinary user interface.
 						</div>
 					)}

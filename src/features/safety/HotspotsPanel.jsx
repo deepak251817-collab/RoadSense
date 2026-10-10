@@ -26,7 +26,7 @@ export default function HotspotsPanel({ show, hotspots = [], hasReports, onClose
         </button>
       </div>
       {hotspots.length === 0 ? (
-        <p className="text-sm text-gray-600 dark:text-gray-300">
+        <p className="stars-empty">
           {hasReports
             ? "No hotspot zones found — active hazards are spread out rather than concentrated."
             : "No hazard reports yet. Hotspots appear once 2+ active hazards cluster within 150 m."}

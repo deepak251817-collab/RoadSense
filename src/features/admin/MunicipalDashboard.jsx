@@ -170,7 +170,7 @@ export default function MunicipalDashboard({ show, summary, reports = [], filter
             Lifecycle queue
           </div>
           {lifecycle.length === 0 ? (
-            <div className="text-[11px] text-gray-500 dark:text-gray-400">No reports yet.</div>
+            <div className="stars-empty">No reports yet.</div>
           ) : (
             <ul className="space-y-1 text-[11px]">
               {lifecycle.map((l) => (

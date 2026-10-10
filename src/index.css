@@ -197,4 +197,21 @@ html, body, #root {
   .stars-skeleton {
     @apply animate-pulse rounded-control bg-gray-200 dark:bg-gray-700;
   }
+
+  /* ---------- Dialog shells (overlay + dim + modal card) ---------- */
+  .stars-dialog-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center px-4;
+  }
+  .stars-dialog-backdrop {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm;
+  }
+  .stars-dialog {
+    @apply relative z-10 w-full bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm
+      rounded-card p-6 shadow-modal;
+  }
+
+  /* ---------- Empty states ---------- */
+  .stars-empty {
+    @apply text-sm text-gray-600 dark:text-gray-300 leading-relaxed;
+  }
 }

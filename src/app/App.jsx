@@ -3264,10 +3264,10 @@ export default function App() {
 			{/* Global modals */}
 			{/* Admin PIN dialog (in-app; native prompt/alert are unreliable) */}
 			{adminPinOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Admin sign in">
-					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setAdminPinOpen(false)} />
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Admin sign in">
+					<div className="stars-dialog-backdrop" onClick={() => setAdminPinOpen(false)} />
 					<form
-						className="relative z-10 w-full max-w-sm bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200"
+						className="stars-dialog max-w-sm"
 						onSubmit={(e) => {
 							e.preventDefault();								if (adminPinValue === '1234') {
 									setAdminMode(true);
@@ -3304,9 +3304,9 @@ export default function App() {
 			)}
 			{/* Reject modal */}
 			{rejectModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Reject hazard report">
-					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeRejectModal} />
-					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Reject hazard report">
+					<div className="stars-dialog-backdrop" onClick={closeRejectModal} />
+					<div className="stars-dialog max-w-md">
 						<h3 className="text-base font-bold mb-3">Reject Report</h3>
 						<div className="text-xs text-gray-600 dark:text-gray-300 mb-3">Optionally add a reason to notify the reporter.</div>
 						<textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason (optional)" className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" rows={3} />
@@ -3320,9 +3320,9 @@ export default function App() {
 
 			{/* Fix proof modal */}
 			{fixModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Submit fix proof">
-					<div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={closeFixModal} />
-					<div className="relative z-10 w-full max-w-md bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Submit fix proof">
+					<div className="stars-dialog-backdrop" onClick={closeFixModal} />
+					<div className="stars-dialog max-w-md">
 						<h3 className="text-base font-bold mb-2">Mark Pothole Fixed</h3>
 						<div className="text-xs text-gray-600 dark:text-gray-300 mb-3">Upload a geotagged photo as proof (GPS required).</div>
 						<div className="mt-1 flex items-center gap-3">
@@ -3356,7 +3356,7 @@ export default function App() {
 
 			{/* Image preview modal */}
 			{imageModal.open && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label={imageModal.caption || 'Photo preview'}>
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label={imageModal.caption || 'Photo preview'}>
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeImageModal} />
 					<div className="relative z-10 w-[90vw] max-w-5xl max-h-[90vh] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm rounded-2xl p-3 shadow-2xl">
 						<div className="flex items-center justify-between mb-2">
@@ -3406,7 +3406,7 @@ export default function App() {
 
 			{/* Camera capture modal */}
 			{cameraOpen && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-label="Camera capture">
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Camera capture">
 					<div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={closeCameraModal} />
 					<div className="relative z-10 w-full max-w-md bg-black rounded-lg overflow-hidden shadow-xl">
 						<div className="relative w-full aspect-[3/4] bg-black">
