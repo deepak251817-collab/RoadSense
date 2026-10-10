@@ -4127,6 +4127,19 @@ export default function App() {
 														<span className="text-[11px] px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium">{km} km</span>
 														{stops.length > 0 && <span className="text-[11px] px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-medium">via {stops.length} stop{stops.length > 1 ? "s" : ""}</span>}
 														<span className={`text-[11px] px-2 py-1 rounded-full font-medium ${delta === 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 dark:bg-gray-700"}`}>{delta === 0 ? "Fastest" : `+${delta} min`}</span>
+														{(() => {
+															const ana = routeAnalyses.find((a) => a.index === idx);
+															if (!ana) return null;
+															return (
+																<span
+																	className="text-[11px] px-2 py-1 rounded-full font-semibold text-white whitespace-nowrap"
+																	style={{ backgroundColor: ana.classification?.color }}
+																	title={`Safety score ${ana.score}/100 — ${ana.classification?.label}`}
+																>
+																	{ana.classification?.label} {ana.score}/100
+																</span>
+															);
+														})()}
 													</div>
 													<div className="mt-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden w-40 shadow-inner">
 														<div className={`h-full transition-all duration-300 ${selected ? "bg-primary-500" : "bg-emerald-500"}`} style={{ width: `${rel}%` }} />
@@ -4413,6 +4426,32 @@ export default function App() {
 							</ul>
 						</div>
 					)}
+					{/* Turn-by-turn directions for the selected route */}
+					{selectedRouteId != null && routes[Number(selectedRouteId)] && (() => {
+						const selSteps = getStepsForRoute(routes[Number(selectedRouteId)]);
+						if (!selSteps.length) return null;
+						return (
+							<div className="stars-card p-4 sm:p-5">
+								<h2 className="stars-h2 mb-1">Directions</h2>
+								<p className="stars-caption mb-3">
+									Route {Number(selectedRouteId) + 1} · {selSteps.length} steps · voice {voiceSettings.navigation && isSpeechSupported() ? "on" : "off"}
+								</p>
+								<ol className="space-y-1.5 max-h-64 overflow-auto pr-1" aria-label={`Directions for route ${Number(selectedRouteId) + 1}`}>
+									{selSteps.map((s, i) => {
+										const text = s.maneuver?.instruction || s.instruction || (s.name ? `Continue on ${s.name}` : "Continue");
+										const dist = s.distance >= 1000 ? `${(s.distance / 1000).toFixed(1)} km` : `${Math.round(s.distance || 0)} m`;
+										return (
+											<li key={i} className="flex items-start gap-2 text-[13px] text-gray-700 dark:text-gray-200">
+												<span className="mt-0.5 shrink-0 w-5 h-5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 text-[10px] font-bold inline-flex items-center justify-center" aria-hidden="true">{i + 1}</span>
+												<span className="flex-1 min-w-0">{text}</span>
+												<span className="text-gray-400 dark:text-gray-500 text-xs whitespace-nowrap">{dist}</span>
+											</li>
+										);
+									})}
+								</ol>
+							</div>
+						);
+					})()}
 					{/* User pothole reporting card — shared with the Report a Hazard section */}
 					{activeSection === "navigate" && reportCardEl}
 
