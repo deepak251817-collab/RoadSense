@@ -69,7 +69,6 @@ import {
 } from "../features/road-conditions/changeDetection";
 import RepairPriorityPanel from "../features/admin/RepairPriorityPanel";
 import { rankRepairs } from "../features/admin/repairPriority";
-import MunicipalDashboard from "../features/admin/MunicipalDashboard";
 import { summarizeMunicipal, applyReportFilters, locationOptions } from "../features/admin/municipalSummary";
 import WhatIfPanel from "../features/routing/WhatIfPanel";
 import { runWhatIf, normalizeWhatIfAdjustments } from "../features/routing/whatIf";
@@ -1258,8 +1257,7 @@ export default function App() {
 		});
 	}, [routes, selectedRouteId, routeAnalyses, userReports, whatIfMode, whatIfAdjustments]);
 
-	// ---- Municipal dashboard (admin-only; utils/municipalSummary) ----
-	const [showMunicipal, setShowMunicipal] = useState(false);
+	// ---- Municipal dashboard data (the admin-only view lives in Road Intelligence) ----
 	// Dashboard filters (date, severity, type, status, priority) — spec Phase 23
 	const [municipalFilters, setMunicipalFilters] = useState({ date: "all", severity: "all", type: "all", status: "all", priority: "all", location: "all" });
 	const municipalReports = useMemo(
@@ -4495,31 +4493,7 @@ export default function App() {
 					{adminMode && (
 						<div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
 							<h2 className="text-sm font-medium mb-2 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Admin</h2>
-							<div className="text-[11px] text-gray-600 dark:text-gray-300 mb-2">Moderate pothole reports and manage data (local-only).</div>
-							<div className="mb-2">
-								<button
-									onClick={() => setShowMunicipal((v) => !v)}
-									aria-expanded={showMunicipal}
-									className={`px-2 py-1 rounded border text-[11px] transition-colors ${showMunicipal ? 'border-slate-600 bg-slate-600 text-white font-bold' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-								>
-									Municipal dashboard
-								</button>
-							</div>
-							{/* Municipal dashboard (admin-only overview) */}
-							<MunicipalDashboard
-								show={showMunicipal}
-								summary={municipalSummary}
-								reports={municipalReports}
-								filters={municipalFilters}
-								onFiltersChange={setMunicipalFilters}
-								locationChoices={locationOptions(userReports)}
-								totalReports={userReports.length}
-								onClose={() => setShowMunicipal(false)}
-								onFocus={(report) => {
-									const map = window._mapInstance;
-									if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
-								}}
-							/>
+							<div className="text-[11px] text-gray-600 dark:text-gray-300 mb-2">Moderate reports and manage data (local-only). The municipal overview lives in <span className="font-semibold">Road Intelligence → Municipal dashboard</span> while Admin mode is on.</div>
 							{/* Dashboard summary */}
 							<div className="mb-2 flex flex-wrap gap-1.5 text-[10px]">
 								<span className="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold">Total {adminQueue.total}</span>
