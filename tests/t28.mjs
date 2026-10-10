@@ -7,7 +7,7 @@ const ok = (cond, name) => {
   else { fail++; console.error(`  ✗ ${name}`); }
 };
 
-const app = readFileSync("src/App.jsx", "utf8");
+const app = readFileSync("src/app/App.jsx", "utf8");
 const main = readFileSync("src/main.jsx", "utf8");
 const eb = readFileSync("src/components/ErrorBoundary.jsx", "utf8");
 

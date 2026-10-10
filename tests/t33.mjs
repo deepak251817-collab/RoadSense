@@ -64,7 +64,7 @@ t("security audit report exists and leaks no secret patterns", () => {
 
 console.log("# client-side injection");
 
-const app = read("src/App.jsx");
+const app = read("src/app/App.jsx");
 
 t("no dangerous sinks in src", () => {
   const walk = (dir) =>
@@ -112,7 +112,7 @@ t("target=_blank links carry a rel (tab-nabbing guard)", () => {
       idx += 15;
     }
   };
-  check("src/App.jsx");
+  check("src/app/App.jsx");
   const walk = (dir) =>
     readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]

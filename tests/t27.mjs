@@ -43,17 +43,17 @@ t("core vendor chunks are still preloaded (no over-lazy regression)", () => {
 });
 
 t("App.jsx has no static recharts import", () => {
-  const app = read("src/App.jsx");
+  const app = read("src/app/App.jsx");
   assert.ok(!/from\s+"recharts"/.test(app), "App.jsx still imports recharts directly");
   assert.ok(!app.includes("<LineChart"), "App.jsx still renders a chart inline");
 });
 
 t("App.jsx lazy-loads all three chart consumers", () => {
-  const app = read("src/App.jsx");
+  const app = read("src/app/App.jsx");
   const lazyPaths = {
-    AnalyticsPanel: "./features/community/AnalyticsPanel",
-    PredictiveSafetyPanel: "./features/safety/PredictiveSafetyPanel",
-    TrafficChart: "./features/routing/TrafficChart",
+    AnalyticsPanel: "../features/community/AnalyticsPanel",
+    PredictiveSafetyPanel: "../features/safety/PredictiveSafetyPanel",
+    TrafficChart: "../features/routing/TrafficChart",
   };
   for (const [name, spec] of Object.entries(lazyPaths)) {
     assert.ok(
@@ -77,7 +77,7 @@ t("heavy panels are memoized", () => {
 });
 
 t("panel handlers are stable (useCallback-wired)", () => {
-  const app = read("src/App.jsx");
+  const app = read("src/app/App.jsx");
   assert.ok(app.includes("onClose={closeAnalytics}"), "AnalyticsPanel onClose not stable");
   assert.ok(app.includes("onClose={closePredictive}"), "PredictiveSafetyPanel onClose not stable");
   assert.ok(app.includes("onClose={closeTrips}"), "TripsPanel onClose not stable");

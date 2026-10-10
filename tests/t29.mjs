@@ -8,7 +8,7 @@ const ok = (cond, name) => {
   else { fail++; console.error(`  ✗ ${name}`); }
 };
 
-const app = readFileSync("src/App.jsx", "utf8");
+const app = readFileSync("src/app/App.jsx", "utf8");
 const css = readFileSync("src/index.css", "utf8");
 const html = readFileSync("index.html", "utf8");
 // aria coverage spans App + every component file (app-shell + feature folders)
