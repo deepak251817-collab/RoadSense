@@ -4160,8 +4160,8 @@ export default function App() {
 									return (
 										<li key={idx} className={`w-full text-sm rounded-xl px-4 py-3 border-2 relative cursor-pointer transition-all duration-200 hover:shadow-lg ${selected ? "border-primary-400 bg-primary-50/70 dark:bg-primary-900/25 shadow-md" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"}`} style={{ minHeight: '88px' }}>
 											<div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${selected ? "bg-primary-500" : "bg-transparent"}`} />
-											<div className="flex items-center justify-between">
-												<div>
+											<div className="flex flex-wrap items-center justify-between gap-2">
+												<div className="min-w-0">
 													<div className="font-semibold flex items-center gap-2">
 														<span className="text-gray-900 dark:text-gray-100">Route {idx + 1}</span>
 													{recommendation?.recommendedIndex === idx && (
