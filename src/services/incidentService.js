@@ -17,7 +17,7 @@ import { pointLineDistMeters, distMeters, isValidCoord } from "../features/routi
 import { fetchWithTimeout } from "./httpClient";
 
 /** Supported incident types. */
-export const INCIDENT_TYPES = {
+const INCIDENT_TYPES = {
   CONGESTION: "congestion",
   ACCIDENT: "accident",
   HAZARD: "hazard",
@@ -43,7 +43,7 @@ const CONGESTION_SEVERITY = { heavy: "high", severe: "critical" };
 const REPORT_SEVERITY = { low: "low", moderate: "medium", high: "high" };
 
 /** Normalize an arbitrary type string into a supported incident type. */
-export function normalizeIncidentType(raw) {
+function normalizeIncidentType(raw) {
   const t = String(raw || "").toLowerCase();
   if (/accident|collision|crash/.test(t)) return INCIDENT_TYPES.ACCIDENT;
   if (/lane|restrict/.test(t)) return INCIDENT_TYPES.LANE_RESTRICTION;
@@ -55,7 +55,7 @@ export function normalizeIncidentType(raw) {
 }
 
 /** Normalize an arbitrary severity string. */
-export function normalizeSeverity(raw, fallback = "medium") {
+function normalizeSeverity(raw, fallback = "medium") {
   const s = String(raw || "").toLowerCase();
   return SEVERITIES.includes(s) ? s : fallback;
 }
@@ -65,7 +65,7 @@ export function normalizeSeverity(raw, fallback = "medium") {
  * Only heavy/severe runs become incidents; those levels come directly from
  * Mapbox congestion annotations.
  */
-export function congestionRunsToIncidents(segments) {
+function congestionRunsToIncidents(segments) {
   if (!Array.isArray(segments) || !segments.length) return [];
   const runs = [];
   let current = null;

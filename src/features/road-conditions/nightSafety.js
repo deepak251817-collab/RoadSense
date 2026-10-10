@@ -29,7 +29,7 @@ export const NIGHT_SAFETY_LABEL = "Predictive estimate";
 export const NIGHT_WINDOW = { startHour: 19, endHour: 6 };
 
 /** Relative weight of each evidence factor (renormalized over available ones). */
-export const NIGHT_WEIGHTS = {
+const NIGHT_WEIGHTS = {
   darkness: 0.35, // time inside the darkness window (always known)
   hazards: 0.30, // active reports near the route
   visibility: 0.20, // fog/mist/haze from fetched weather points
@@ -37,13 +37,13 @@ export const NIGHT_WEIGHTS = {
 };
 
 /** How far from the route (meters) a hazard report still counts. */
-export const NIGHT_HAZARD_THRESHOLD_METERS = 120;
+const NIGHT_HAZARD_THRESHOLD_METERS = 120;
 
 /**
  * Risk bands for a 0..100 night-safety risk (higher = worse).
  * Colors match the segment-risk palette.
  */
-export const NIGHT_BANDS = [
+const NIGHT_BANDS = [
   { key: "severe", label: "Severe", min: 80, color: "#ef4444" },
   { key: "high", label: "High", min: 60, color: "#f97316" },
   { key: "moderate", label: "Moderate", min: 30, color: "#eab308" },
@@ -75,7 +75,7 @@ export function isNightTime(date = new Date(), window = NIGHT_WINDOW) {
  * Deeper into the night = higher risk; edges of the window = lower.
  * Returns null when the date is unusable.
  */
-export function darknessRisk(date = new Date(), window = NIGHT_WINDOW) {
+function darknessRisk(date = new Date(), window = NIGHT_WINDOW) {
   const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
   if (!isNightTime(d, window)) return 0; // daytime: no darkness risk
   const h = d.getHours();
@@ -90,7 +90,7 @@ export function darknessRisk(date = new Date(), window = NIGHT_WINDOW) {
 }
 
 /** 0..100 visibility risk from a weather main/description label (night-weighted). */
-export function nightVisibilityRiskFromWeather(main, description = "") {
+function nightVisibilityRiskFromWeather(main, description = "") {
   const m = String(main || "").toLowerCase();
   const desc = String(description || "").toLowerCase();
   if (m === "fog") return 90;
@@ -106,7 +106,7 @@ export function nightVisibilityRiskFromWeather(main, description = "") {
 }
 
 /** Collect active hazard reports near a route (same visibility rules as the map). */
-export function collectNightHazards(route, reports, _opts = {}, thresholdMeters = NIGHT_HAZARD_THRESHOLD_METERS) {
+function collectNightHazards(route, reports, _opts = {}, thresholdMeters = NIGHT_HAZARD_THRESHOLD_METERS) {
   const empty = { items: [], count: 0, highCount: 0 };
   const coords = route?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(reports)) return empty;
@@ -127,7 +127,7 @@ export function collectNightHazards(route, reports, _opts = {}, thresholdMeters 
 }
 
 /** 0..100 risk from active hazard reports near the route at night. */
-export function nightHazardRisk({ count = 0, highCount = 0, distanceMeters = null } = {}) {
+function nightHazardRisk({ count = 0, highCount = 0, distanceMeters = null } = {}) {
   const total = Math.max(0, count || 0);
   if (total === 0) return 0;
   const high = Math.max(0, Math.min(highCount || 0, total));

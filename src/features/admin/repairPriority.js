@@ -32,14 +32,14 @@ export const PRIORITY_WEIGHTS = {
 };
 
 /** Score contribution of each severity level (0..100). */
-export const PRIORITY_SEVERITY_SCORE = { critical: 100, high: 80, moderate: 50, low: 25 };
+const PRIORITY_SEVERITY_SCORE = { critical: 100, high: 80, moderate: 50, low: 25 };
 
 /**
  * Score contribution of each hazard type (0..100) — how much a repair of
  * this type matters for road safety. Documentation-order types map first
  * through hazardTypeMeta for canonical keys.
  */
-export const PRIORITY_TYPE_SCORE = {
+const PRIORITY_TYPE_SCORE = {
   "road-closure": 95,
   "signal-problem": 90,
   "fallen-tree": 85,
@@ -54,7 +54,7 @@ export const PRIORITY_TYPE_SCORE = {
 };
 
 /** Score contribution of each lifecycle status (0..100). */
-export const PRIORITY_STATUS_SCORE = {
+const PRIORITY_STATUS_SCORE = {
   verified: 100, // admin confirmed — definitely real
   "repair-requested": 85, // queued for repair but not done
   "under-review": 70, // being reviewed
@@ -62,10 +62,10 @@ export const PRIORITY_STATUS_SCORE = {
 };
 
 /** Days for the age factor to reach its maximum (saturating). */
-export const PRIORITY_AGE_SATURATION_DAYS = 14;
+const PRIORITY_AGE_SATURATION_DAYS = 14;
 
 /** Recurrence window: other active reports within this range count. */
-export const PRIORITY_RECURRENCE_METERS = 150;
+const PRIORITY_RECURRENCE_METERS = 150;
 
 /** Priority bands (higher score = more urgent). */
 export const PRIORITY_BANDS = [
@@ -87,7 +87,7 @@ export function classifyPriority(score) {
 }
 
 /** 0..100 age score: longer-waiting hazards rank higher (saturating). */
-export function ageScore(report, now = Date.now()) {
+function ageScore(report, now = Date.now()) {
   const created = Number(report?.captureAt || report?.createdAt);
   if (!Number.isFinite(created) || created <= 0) return 0; // unknown age → no boost
   const days = Math.max(0, (now - created) / (24 * 3600 * 1000));
@@ -95,19 +95,19 @@ export function ageScore(report, now = Date.now()) {
 }
 
 /** 0..100 severity score. */
-export function severityScore(severity) {
+function severityScore(severity) {
   const key = String(severity || "moderate").toLowerCase();
   return PRIORITY_SEVERITY_SCORE[key] ?? PRIORITY_SEVERITY_SCORE.moderate;
 }
 
 /** 0..100 type-criticality score (canonical key via hazardTypeMeta). */
-export function typeScore(type) {
+function typeScore(type) {
   const canonical = String(hazardTypeMeta(type)?.key || type || "other").toLowerCase();
   return PRIORITY_TYPE_SCORE[canonical] ?? PRIORITY_TYPE_SCORE.other;
 }
 
 /** 0..100 confirmation score from the lifecycle status. */
-export function confirmationScore(status) {
+function confirmationScore(status) {
   const key = normalizeStatus(status);
   return PRIORITY_STATUS_SCORE[key] ?? PRIORITY_STATUS_SCORE.reported;
 }
@@ -121,7 +121,7 @@ export function confirmationScore(status) {
  * @param {number} [thresholdMeters]
  * @returns {number}
  */
-export function recurrenceCount(report, reports = [], thresholdMeters = PRIORITY_RECURRENCE_METERS) {
+function recurrenceCount(report, reports = [], thresholdMeters = PRIORITY_RECURRENCE_METERS) {
   if (!report || !isValidCoord(report.coord) || !Array.isArray(reports)) return 0;
   let n = 0;
   for (const other of reports) {
@@ -137,7 +137,7 @@ export function recurrenceCount(report, reports = [], thresholdMeters = PRIORITY
 }
 
 /** 0..100 recurrence score (each additional nearby hazard adds evidence). */
-export function recurrenceScore(others) {
+function recurrenceScore(others) {
   const n = Math.max(0, Number(others) || 0);
   return Math.round(clamp(n * 33));
 }

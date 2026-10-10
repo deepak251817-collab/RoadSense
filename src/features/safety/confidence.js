@@ -18,7 +18,7 @@
 import { distMeters } from "../routing/geo";
 
 /** Display metadata for confidence levels. */
-export const CONFIDENCE_LEVELS = {
+const CONFIDENCE_LEVELS = {
   HIGH: { label: "HIGH CONFIDENCE", color: "#15803d" },
   MEDIUM: { label: "MEDIUM CONFIDENCE", color: "#d97706" },
   LOW: { label: "LOW CONFIDENCE", color: "#6b7280" },
@@ -29,7 +29,7 @@ export const CONFIDENCE_LEVELS = {
  * workflow so location confidence is always shown SEPARATELY from any AI
  * detection confidence.
  */
-export const LOCATION_CONFIDENCE_META = {
+const LOCATION_CONFIDENCE_META = {
   gps: { level: "HIGH", label: "High — live device GPS", color: "#15803d" },
   exif: { level: "HIGH", label: "High — photo EXIF geotag", color: "#15803d" },
   ocr: { level: "MEDIUM", label: "Medium — read from image overlay (OCR)", color: "#d97706" },

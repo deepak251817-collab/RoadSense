@@ -28,7 +28,7 @@ import {
 } from "./geo";
 
 /** Segment configuration (deterministic). */
-export const SEGMENT_CONFIG = {
+const SEGMENT_CONFIG = {
   targetSegmentMeters: 500, // aim for ~500 m segments
   minSegments: 4,
   maxSegments: 12,
@@ -38,7 +38,7 @@ export const SEGMENT_CONFIG = {
 };
 
 /** Risk label bands shared with the map layer colors (Phase 6). */
-export const SEGMENT_BANDS = [
+const SEGMENT_BANDS = [
   { key: "safe", label: "Safe", min: 75, color: "#22c55e" },
   { key: "moderate", label: "Moderate", min: 60, color: "#eab308" },
   { key: "risky", label: "Risky", min: 40, color: "#f97316" },
@@ -114,7 +114,7 @@ function distToSegment(coord, segCoords) {
  * @param {Date}   [ctx.now]
  * @returns {Object} segment analysis record
  */
-export function analyzeSegment(segment, ctx = {}) {
+function analyzeSegment(segment, ctx = {}) {
   const {
     reports = [],
     incidents = null,

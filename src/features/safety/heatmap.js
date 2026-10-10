@@ -9,7 +9,7 @@
 import { normalizeStatus } from "../admin/hazardLifecycle";
 
 /** Severity contribution to local hazard intensity. */
-export const HEATMAP_SEVERITY_WEIGHTS = {
+const HEATMAP_SEVERITY_WEIGHTS = {
   high: 1,
   moderate: 0.55,
   low: 0.25,
@@ -32,7 +32,7 @@ const FADE_END_AGE_MS = 365 * 24 * 60 * 60 * 1000; // 1 year
  * @param {number} [opts.now] timestamp for deterministic recency
  * @returns {number} 0..1
  */
-export function reportHeatmapWeight(report, { includeFixed = false, now = Date.now() } = {}) {
+function reportHeatmapWeight(report, { includeFixed = false, now = Date.now() } = {}) {
   if (!report || !Array.isArray(report.coord)) return 0;
   if (report.hiddenGlobally) return 0;
 

@@ -38,13 +38,12 @@ invents its own severity palette.
 
 | Class | Purpose |
 | --- | --- |
-| `.stars-card` / `.stars-card-pad` | surface containers |
-| `.stars-h1` `.stars-h2` `.stars-h3` `.stars-display` `.stars-num` | type scale (headings, big numbers) |
-| `.stars-caption` / `.stars-divider` | supporting text / separators |
+| `.stars-card` | surface containers |
+| `.stars-h2` `.stars-h3` | type scale (headings) |
+| `.stars-caption` | supporting text |
 | `.stars-btn` + `-primary` `-secondary` `-ghost` `-danger` | button ladder (one primary action per view) |
 | `.stars-input` / `.stars-label` | form fields |
 | `.stars-badge` + `-ok` `-warn` `-danger` `-info` `-neutral` | status labels (always with text) |
-| `.stars-note` + `-info` `-warn` | inline notices |
 | `.stars-seg` / `.stars-seg-item` | segmented switcher (map style) |
 | `.stars-skeleton` | loading placeholders |
 | `.stars-dialog-overlay` / `.stars-dialog-backdrop` / `.stars-dialog` | dialog shells (add `max-w-*` for width) |

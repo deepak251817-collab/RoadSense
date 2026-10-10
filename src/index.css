@@ -56,12 +56,6 @@ html, body, #root {
 
 @layer components {
   /* ---------- Typography hierarchy ---------- */
-  .stars-display {
-    @apply text-2xl font-bold tracking-tight;
-  }
-  .stars-h1 {
-    @apply text-lg sm:text-xl font-bold tracking-tight;
-  }
   .stars-h2 {
     @apply text-sm sm:text-base font-semibold;
   }
@@ -74,19 +68,10 @@ html, body, #root {
   .stars-caption {
     @apply text-xs text-gray-500 dark:text-gray-400;
   }
-  .stars-num {
-    @apply font-bold tabular-nums;
-  }
 
   /* ---------- Cards & panels ---------- */
   .stars-card {
     @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-card shadow-card;
-  }
-  .stars-card-pad {
-    @apply p-3 sm:p-4;
-  }
-  .stars-divider {
-    @apply border-t border-gray-200 dark:border-gray-700;
   }
 
   /* ---------- Buttons ---------- */
@@ -154,19 +139,6 @@ html, body, #root {
   }
   .stars-seg-item[aria-pressed='true'] {
     @apply bg-primary-600 text-white hover:bg-primary-600;
-  }
-
-  /* ---------- Info / simulation / honesty strips ---------- */
-  .stars-note {
-    @apply rounded-control border px-3 py-2 text-xs;
-  }
-  .stars-note-info {
-    @apply stars-note bg-blue-50 border-blue-200 text-blue-800
-      dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200;
-  }
-  .stars-note-warn {
-    @apply stars-note bg-amber-50 border-amber-200 text-amber-800
-      dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200;
   }
 
   /* ---------- Tooltip (CSS-only, keyboard accessible) ---------- */

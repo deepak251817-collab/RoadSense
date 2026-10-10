@@ -41,7 +41,7 @@ export function downscaleImage(src, { maxW = 1200, maxH = 1200, quality = 0.85 }
  * Extract GPS + capture date from an image file via EXIF.
  * @returns {Promise<{lat:number|null, lng:number|null, capturedAt:number|null, hasGps:boolean, readable:boolean}>}
  */
-export async function extractExifMeta(file) {
+async function extractExifMeta(file) {
   try {
     const exif = await exifr.parse(file);
     const lat = exif?.latitude;
@@ -76,7 +76,7 @@ function loadImage(src) {
  * Heuristic fallback only — results are validated by the caller.
  * @returns {Promise<{lat:number|null, lng:number|null, capturedAt:number|null}>}
  */
-export async function runOcrCoordinateFallback(dataUrl, { onStatus, extractDate = true } = {}) {
+async function runOcrCoordinateFallback(dataUrl, { onStatus, extractDate = true } = {}) {
   try {
     const img = await loadImage(dataUrl);
     const maxW = 1200;
@@ -324,7 +324,7 @@ let activeDetector = null;
  * Register the active detector. Replaces any previous one. Invalid shapes are
  * rejected so a broken registration can never silently fake results.
  */
-export function registerPotholeDetector(detector) {
+function registerPotholeDetector(detector) {
   if (!detector || typeof detector.detect !== "function") {
     throw new Error("registerPotholeDetector: detector must provide detect(image)");
   }
@@ -453,7 +453,7 @@ export async function detectPotholes(image) {
  * @param {Object} [opts.headers] extra request headers
  * @returns {{id:string, kind:string, detect:Function}}
  */
-export function createRemoteDetector({ endpoint, id = "remote-inference", fieldName = "image", headers = {} } = {}) {
+function createRemoteDetector({ endpoint, id = "remote-inference", fieldName = "image", headers = {} } = {}) {
   if (!endpoint) throw new Error("createRemoteDetector: endpoint is required");
   return {
     id,

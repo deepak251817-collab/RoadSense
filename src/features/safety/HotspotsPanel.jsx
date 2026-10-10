@@ -57,10 +57,10 @@ export default function HotspotsPanel({ show, hotspots = [], hasReports, onClose
                   </span>
                 </span>
                 <span
-                  className={`flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded-full ${
+                  className={`flex-shrink-0 ${
                     h.severity === "high"
-                      ? "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
-                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                      ? "stars-badge-danger"
+                      : "stars-badge-warn"
                   }`}
                 >
                   {h.severity === "high" ? "HIGH" : h.severity.toUpperCase()}

@@ -3351,8 +3351,8 @@ export default function App() {
 						<div className="text-xs text-gray-600 dark:text-gray-300 mb-3">Optionally add a reason to notify the reporter.</div>
 						<textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason (optional)" className="w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent" rows={3} />
 						<div className="mt-4 flex justify-end gap-2">
-							<button onClick={closeRejectModal} className="px-4 py-2 text-sm font-medium rounded-xl border-2 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800">Cancel</button>
-							<button onClick={confirmRejectModal} className="px-4 py-2 text-sm font-semibold rounded-control bg-red-600 text-white hover:bg-red-700 transition-colors duration-150">Reject</button>
+							<button onClick={closeRejectModal} className="stars-btn-secondary">Cancel</button>
+							<button onClick={confirmRejectModal} className="stars-btn-danger">Reject</button>
 						</div>
 					</div>
 				</div>
@@ -4352,7 +4352,7 @@ export default function App() {
 													{trafficByRoute[idx]?.loading && (
 														<div className="mt-1">
 															<div className="h-24 rounded border border-gray-200 dark:border-gray-700 p-2">
-																<div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-2" />
+																<div className="h-3 w-24 stars-skeleton mb-2" />
 																<div className="h-full w-full bg-gray-100 dark:bg-gray-800 rounded animate-pulse" />
 															</div>
 															<div className="mt-1 text-[11px] text-gray-500">Loading traffic…</div>
@@ -4426,9 +4426,9 @@ export default function App() {
 														<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
 															{Array.from({ length: 3 }).map((_, sk) => (
 																<div key={sk} className="rounded border border-gray-200 dark:border-gray-700 p-2">
-																	<div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-2" />
-																	<div className="h-4 w-12 bg-gray-200 dark:bg-gray-700 rounded animate-pulse mb-1" />
-																	<div className="h-3 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+																	<div className="h-3 w-16 stars-skeleton mb-2" />
+																	<div className="h-4 w-12 stars-skeleton mb-1" />
+																	<div className="h-3 w-24 stars-skeleton" />
 																</div>
 															))}
 														</div>

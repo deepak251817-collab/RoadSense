@@ -105,13 +105,13 @@ function isActiveCandidate(report) {
 }
 
 /** Reports matched by a selection mode (active ones only). */
-export function matchReportsForMode(reports = [], mode = "all") {
+function matchReportsForMode(reports = [], mode = "all") {
   const matcher = MATCHERS[mode] || MATCHERS.all;
   return (Array.isArray(reports) ? reports : []).filter((r) => isActiveCandidate(r) && matcher(r));
 }
 
 /** Apply the simulation: matched active reports become "fixed". */
-export function applySimulation(reports = [], mode = "all") {
+function applySimulation(reports = [], mode = "all") {
   const matchedIds = new Set(matchReportsForMode(reports, mode).map((r) => r.id));
   const simulated = (Array.isArray(reports) ? reports : []).map((r) =>
     r && matchedIds.has(r.id) ? { ...r, status: "fixed", simulatedFixed: true } : r

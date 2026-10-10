@@ -10,7 +10,7 @@
  * storage-like object (defaults to window.localStorage) for testability.
  */
 
-export const TRIP_HISTORY_KEY = "tripHistory";
+const TRIP_HISTORY_KEY = "tripHistory";
 export const MAX_TRIPS = 50;
 
 const hasCoord = (c) =>

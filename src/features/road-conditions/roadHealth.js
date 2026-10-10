@@ -22,17 +22,17 @@ import { CONFIDENCE_BANDS } from "../safety/safetyScore";
 export const ROAD_HEALTH_LABEL = "Report-based index";
 
 /** Severity weights used for active-report pressure. */
-export const ROAD_HEALTH_SEVERITY_WEIGHTS = { high: 3, moderate: 2, low: 1, critical: 4 };
+const ROAD_HEALTH_SEVERITY_WEIGHTS = { high: 3, moderate: 2, low: 1, critical: 4 };
 
 /**
  * Half-saturation constant: this many severity-weighted active reports
  * produce half of the maximum pressure penalty. Keeps the index
  * meaningful for both a handful of reports and a large database.
  */
-export const ROAD_HEALTH_SATURATION = 12;
+const ROAD_HEALTH_SATURATION = 12;
 
 /** Index bands (higher = healthier). */
-export const ROAD_HEALTH_BANDS = [
+const ROAD_HEALTH_BANDS = [
   { key: "good", label: "Good", min: 80, color: "#22c55e" },
   { key: "fair", label: "Fair", min: 60, color: "#eab308" },
   { key: "poor", label: "Poor", min: 40, color: "#f97316" },

@@ -46,7 +46,7 @@ const FORECAST_WEATHER_RISK = {
  * @param {Object|null} forecast OpenWeather forecast entry (or {main: "..."} )
  * @returns {number|null}
  */
-export function forecastWeatherRisk(forecast) {
+function forecastWeatherRisk(forecast) {
   if (!forecast || typeof forecast !== "object") return null;
   const main = String(forecast.weather?.[0]?.main || forecast.main || "").toLowerCase();
   if (!main) return null;

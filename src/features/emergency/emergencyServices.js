@@ -29,10 +29,10 @@ export const SERVICES_RADIUS_METERS = 5000;
 const SERVICES_MAX_RESULTS = 12;
 
 /** OSM TTL cache lifetime for the same area. */
-export const SERVICES_CACHE_TTL_MS = 10 * 60 * 1000;
+const SERVICES_CACHE_TTL_MS = 10 * 60 * 1000;
 
 /** Overpass endpoint (env-overridable for tests/mirrors). */
-export const OVERPASS_ENDPOINT =
+const OVERPASS_ENDPOINT =
 	(typeof import.meta !== "undefined" && import.meta.env?.VITE_OVERPASS_URL) ||
 	"https://overpass-api.de/api/interpreter";
 
@@ -40,10 +40,10 @@ export const OVERPASS_ENDPOINT =
  * Fallback Overpass mirrors, tried in order when the primary endpoint
  * fails (the public instance regularly returns 504s under load).
  */
-export const OVERPASS_MIRRORS = ["https://overpass.kumi.systems/api/interpreter"];
+const OVERPASS_MIRRORS = ["https://overpass.kumi.systems/api/interpreter"];
 
 /** amenity tag → display category. Only genuine emergency-relevant types. */
-export const SERVICE_CATEGORY_BY_AMENITY = {
+const SERVICE_CATEGORY_BY_AMENITY = {
 	hospital: "Hospital",
 	clinic: "Clinic",
 	police: "Police station",
@@ -62,7 +62,7 @@ function serviceName(tags, category) {
  * Build the Overpass QL query for services around a coordinate.
  * Nodes and ways/relations (via center) are both requested.
  */
-export function buildOverpassQuery(coord, radiusMeters = SERVICES_RADIUS_METERS) {
+function buildOverpassQuery(coord, radiusMeters = SERVICES_RADIUS_METERS) {
 	if (!isValidCoord(coord)) return null;
 	const [lng, lat] = coord;
 	const r = Math.max(100, Math.round(radiusMeters));
@@ -79,7 +79,7 @@ export function buildOverpassQuery(coord, radiusMeters = SERVICES_RADIUS_METERS)
 }
 
 /** Full GET URL for the Overpass endpoint (null when coord invalid). */
-export function buildOverpassUrl(coord, radiusMeters = SERVICES_RADIUS_METERS, endpoint = OVERPASS_ENDPOINT) {
+function buildOverpassUrl(coord, radiusMeters = SERVICES_RADIUS_METERS, endpoint = OVERPASS_ENDPOINT) {
 	const q = buildOverpassQuery(coord, radiusMeters);
 	if (!q) return null;
 	return `${endpoint}?data=${encodeURIComponent(q)}`;
@@ -94,7 +94,7 @@ export function buildOverpassUrl(coord, radiusMeters = SERVICES_RADIUS_METERS, e
  * @param {Array} origin [lng, lat] position to measure from
  * @returns {Array<{id,name,category,amenity,coord,distanceMeters,phone,openingHours}>}
  */
-export function parseOverpassServices(json, origin, { range = SERVICES_RADIUS_METERS, limit = SERVICES_MAX_RESULTS } = {}) {
+function parseOverpassServices(json, origin, { range = SERVICES_RADIUS_METERS, limit = SERVICES_MAX_RESULTS } = {}) {
 	if (!isValidCoord(origin) || !Array.isArray(json?.elements)) return [];
 	const out = [];
 	const seen = new Set();

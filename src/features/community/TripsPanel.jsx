@@ -93,12 +93,12 @@ function TripsPanel({ show, trips = [], stats, onClear, onClose }) {
                     {t.destLabel || `${t.destCoord[1].toFixed(3)},${t.destCoord[0].toFixed(3)}`}
                   </span>
                   <span
-                    className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    className={`flex-shrink-0 ${
                       isActive
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                        ? "stars-badge-warn"
                         : t.arrived
-                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
-                          : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                          ? "stars-badge-ok"
+                          : "stars-badge-neutral"
                     }`}
                   >
                     {isActive ? "IN PROGRESS" : t.arrived ? "ARRIVED" : "ENDED"}

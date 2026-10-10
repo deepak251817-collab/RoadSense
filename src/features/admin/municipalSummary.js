@@ -20,7 +20,7 @@ import { detectChanges, CHANGE_LABEL } from "../road-conditions/changeDetection"
 export const MUNICIPAL_LABEL = "Report-based summary";
 
 /** How many top repair priorities the dashboard surfaces. */
-export const MUNICIPAL_TOP_PRIORITIES = 5;
+const MUNICIPAL_TOP_PRIORITIES = 5;
 
 /** Coarse coordinate grid (~0.05°, ≈5 km) used for the dashboard location filter and area views. */
 export const LOCATION_GRID_DEG = 0.05;

@@ -19,19 +19,19 @@
 import { roadHealthIndex, classifyRoadHealth } from "./roadHealth";
 
 /** localStorage key for the daily baseline snapshots. */
-export const CHANGE_SNAPSHOT_KEY = "roadChangeSnapshots";
+const CHANGE_SNAPSHOT_KEY = "roadChangeSnapshots";
 
 /** Display label that must accompany every change number in the UI. */
 export const CHANGE_LABEL = "Report-based comparison";
 
 /** Snapshots kept (one per calendar day). */
-export const CHANGE_MAX_SNAPSHOTS = 30;
+const CHANGE_MAX_SNAPSHOTS = 30;
 
 /**
  * Minimum age of the earliest baseline before any trend may be claimed.
  * Younger baselines → insufficient history.
  */
-export const CHANGE_MIN_BASELINE_AGE_MS = 60 * 60 * 1000; // 1 hour
+const CHANGE_MIN_BASELINE_AGE_MS = 60 * 60 * 1000; // 1 hour
 
 /** Local calendar-day key for a timestamp. */
 export function dateKey(ts) {

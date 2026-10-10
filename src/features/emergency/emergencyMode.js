@@ -55,7 +55,7 @@ const RAIN_LIKE = /rain|thunder|drizzle|shower|storm/i;
  * Resolve the best known position: live GPS first, then the planned route
  * start, then the destination. Returns { coord, label } or coord: null.
  */
-export function resolveEmergencyLocation({ userCoord, sourceCoord, destCoord } = {}) {
+function resolveEmergencyLocation({ userCoord, sourceCoord, destCoord } = {}) {
 	if (isValidCoord(userCoord)) return { coord: userCoord, label: "Current GPS position" };
 	if (isValidCoord(sourceCoord)) return { coord: sourceCoord, label: "Route start point" };
 	if (isValidCoord(destCoord)) return { coord: destCoord, label: "Destination" };
@@ -66,7 +66,7 @@ export function resolveEmergencyLocation({ userCoord, sourceCoord, destCoord } =
  * Active hazard reports near a coordinate, nearest first.
  * Fixed/rejected reports are excluded — they no longer affect the road.
  */
-export function nearbyActiveReports(coord, reports = [], { range = EMERGENCY_NEARBY_RANGE_METERS, limit = EMERGENCY_MAX_NEARBY } = {}) {
+function nearbyActiveReports(coord, reports = [], { range = EMERGENCY_NEARBY_RANGE_METERS, limit = EMERGENCY_MAX_NEARBY } = {}) {
 	if (!isValidCoord(coord)) return [];
 	const out = [];
 	for (const r of reports) {
@@ -87,7 +87,7 @@ export function nearbyActiveReports(coord, reports = [], { range = EMERGENCY_NEA
 }
 
 /** Incidents near a coordinate, nearest first. */
-export function nearbyIncidents(coord, incidents = [], { range = EMERGENCY_NEARBY_RANGE_METERS, limit = EMERGENCY_MAX_NEARBY } = {}) {
+function nearbyIncidents(coord, incidents = [], { range = EMERGENCY_NEARBY_RANGE_METERS, limit = EMERGENCY_MAX_NEARBY } = {}) {
 	if (!isValidCoord(coord)) return [];
 	const out = [];
 	for (const inc of incidents) {

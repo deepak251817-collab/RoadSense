@@ -23,7 +23,7 @@ import {
 } from "./recommendation";
 
 /** localStorage key for the user's route preferences. */
-export const ROUTE_PREFERENCES_KEY = "routePreferences";
+const ROUTE_PREFERENCES_KEY = "routePreferences";
 
 /** Display label for the preference feature in the UI. */
 export const ROUTE_PREFERENCES_LABEL = "Route preferences";
@@ -109,7 +109,7 @@ export function normalizeRoutePreferences(raw) {
 }
 
 /** Safety band keys that count as "high risk" for avoidance. */
-export const HIGH_RISK_BAND_KEYS = ["risky", "high-risk"];
+const HIGH_RISK_BAND_KEYS = ["risky", "high-risk"];
 
 /**
  * Apply the avoidance toggles to analyzed routes. Pure and conservative:

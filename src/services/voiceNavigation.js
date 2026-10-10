@@ -55,7 +55,7 @@ function pickVoice(synth) {
  * Safety warnings interrupt whatever is currently being spoken.
  * @returns {boolean} true when an utterance was actually queued
  */
-export function speak(text, { kind = "navigation", force = false } = {}) {
+function speak(text, { kind = "navigation", force = false } = {}) {
   if (!isSpeechSupported() || !text) return false;
   if (!force) {
     const settings = loadVoiceSettings();
@@ -94,7 +94,7 @@ export function cancelSpeech() {
 }
 
 /** Human phrase for a maneuver step ("Turn left", "Keep right", …). */
-export function maneuverPhrase(step) {
+function maneuverPhrase(step) {
   const type = step?.maneuver?.type;
   const mod = String(step?.maneuver?.modifier || "").toLowerCase();
   switch (type) {
@@ -122,7 +122,7 @@ export function maneuverPhrase(step) {
 }
 
 /** Spoken distance: "200 meters", "1.2 kilometers". */
-export function formatSpokenDistance(meters) {
+function formatSpokenDistance(meters) {
   if (!Number.isFinite(meters) || meters < 0) return "";
   if (meters >= 1000) return `${(meters / 1000).toFixed(1)} kilometers`;
   if (meters >= 100) return `${Math.round(meters / 50) * 50} meters`;

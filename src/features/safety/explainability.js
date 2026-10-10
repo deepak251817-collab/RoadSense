@@ -36,13 +36,13 @@ export const DECISION_METHOD = {
 };
 
 /** Engine badges shown to the user. */
-export const ENGINE_LABELS = {
+const ENGINE_LABELS = {
   rule: "Rule-based decision engine",
   model: "Registered AI model",
 };
 
 /** Short badge used in headers/panels. */
-export const ENGINE_BADGES = {
+const ENGINE_BADGES = {
   rule: "Rule-based engine · no ML model",
   model: "AI model",
 };
@@ -52,7 +52,7 @@ export const ENGINE_BADGES = {
  * own risk value for that factor — it is a description of the input, not a
  * model attribution.
  */
-export const DIRECTION_LABELS = {
+const DIRECTION_LABELS = {
   "increases-risk": "Raises risk",
   neutral: "No effect on risk",
   "no-data": "No data — excluded from the result",
@@ -65,13 +65,13 @@ export const CONTRIBUTION_NOTE =
   "a model feature-importance percentage and contributions do not sum to 100.";
 
 /** Disclosure used whenever no real model produced the output. */
-export const RULE_BASED_DISCLOSURE =
+const RULE_BASED_DISCLOSURE =
   "Computed by a deterministic rule-based engine from the inputs listed below. " +
   "No machine-learning model produced this result, so no model confidence or " +
   "feature-importance values are shown.";
 
 /** Disclosure used once a real model has been registered. */
-export function modelDisclosure(model) {
+function modelDisclosure(model) {
   const version = model?.version ? ` v${model.version}` : "";
   const kind = model?.kind && model.kind !== "ai" ? ` (${model.kind})` : "";
   return `Computed by the registered inference model "${model?.name ?? "unknown"}"${version}${kind}. ` +
@@ -94,7 +94,7 @@ let activeModel = null;
  * @returns {{name:string, version:string|null, kind:string, infer:Function|null}}
  * @throws {TypeError} when the descriptor is malformed
  */
-export function registerInferenceModel(model) {
+function registerInferenceModel(model) {
   if (!model || typeof model !== "object" || Array.isArray(model)) {
     throw new TypeError("registerInferenceModel: expected a model descriptor object");
   }
@@ -114,13 +114,8 @@ export function registerInferenceModel(model) {
   return getInferenceModel();
 }
 
-/** Unregister any model; explanations fall back to rule-based labelling. */
-export function clearInferenceModel() {
-  activeModel = null;
-}
-
 /** Copy of the registered model descriptor (null when none is registered). */
-export function getInferenceModel() {
+function getInferenceModel() {
   if (!activeModel) return null;
   return {
     name: activeModel.name,
@@ -131,7 +126,7 @@ export function getInferenceModel() {
 }
 
 /** True only when a genuine inference backend is registered. */
-export function hasRealModel() {
+function hasRealModel() {
   return activeModel != null;
 }
 
@@ -200,7 +195,7 @@ function summarizeFactor(label, risk, contribution, estimated, available) {
  * Accepts an engine factor map ({key: {...}}) or an array of factor records.
  * @returns {Array<Object>}
  */
-export function normalizeFactors(factors) {
+function normalizeFactors(factors) {
   if (Array.isArray(factors)) {
     return factors
       .map((f, i) => normalizeFactorEntry(f?.key ?? f?.label ?? i, f))
@@ -230,7 +225,7 @@ export function normalizeFactors(factors) {
  *   undefined → use the registry, null → force rule-based
  * @returns {Object} explanation record
  */
-export function buildExplanation({
+function buildExplanation({
   title = "Decision",
   value = null,
   level = null,

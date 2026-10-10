@@ -20,7 +20,7 @@ export const PRIORITY_WEIGHTS = {
 };
 
 /** Configurable recommendation policy (defaults to Balanced 50/50). */
-export const DEFAULT_RECOMMENDATION_CONFIG = {
+const DEFAULT_RECOMMENDATION_CONFIG = {
   weights: { safety: 0.5, time: 0.5 },
 };
 

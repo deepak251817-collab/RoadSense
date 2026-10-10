@@ -20,7 +20,7 @@ export const DEFAULT_WEIGHTS = {
 };
 
 /** Safety classification bands (inclusive ranges). */
-export const SAFETY_BANDS = [
+const SAFETY_BANDS = [
   { min: 90, max: 100, key: "very-safe", label: "Very Safe", color: "#15803d" },
   { min: 75, max: 89, key: "safe", label: "Safe", color: "#16a34a" },
   { min: 60, max: 74, key: "moderate", label: "Moderate", color: "#d97706" },
@@ -218,7 +218,7 @@ export function calculateTimeRisk(date = new Date()) {
 }
 
 /** Bands for interpreting a time risk value. */
-export const TIME_RISK_BANDS = [
+const TIME_RISK_BANDS = [
   { key: "high", label: "High risk", min: 70, color: "#dc2626" },
   { key: "elevated", label: "Elevated", min: 50, color: "#d97706" },
   { key: "typical", label: "Typical", min: 0, color: "#16a34a" },

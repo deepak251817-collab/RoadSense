@@ -4,14 +4,14 @@
  */
 
 /** Convert [lng, lat] to approximate metric Web-Mercator coordinates. */
-export const lonLatToMeters = (lng, lat) => {
+const lonLatToMeters = (lng, lat) => {
   const x = (lng * Math.PI * 6378137) / 180;
   const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * 6378137;
   return [x, y];
 };
 
 /** Distance in meters from point p to segment [a, b] (Mercator approximation). */
-export const pointSegDistMeters = (p, a, b) => {
+const pointSegDistMeters = (p, a, b) => {
   const [px, py] = lonLatToMeters(p[0], p[1]);
   const [ax, ay] = lonLatToMeters(a[0], a[1]);
   const [bx, by] = lonLatToMeters(b[0], b[1]);

@@ -24,7 +24,7 @@ import { isPotholeType } from "../safety/hazardTypes";
 import { pointLineDistMeters, isValidCoord } from "./geo";
 
 /** Human label for a 0..100 risk value (null → unavailable). */
-export function labelForRisk(risk) {
+function labelForRisk(risk) {
   if (risk == null || !Number.isFinite(risk)) return "—";
   if (risk < 30) return "Low";
   if (risk < 60) return "Medium";
@@ -88,7 +88,7 @@ export function collectRouteReports(route, reports, { showFixed, adminMode } = {
  * route — clearly flagged as an estimate by the caller.
  * @returns {{risk:number|null, estimated:boolean}}
  */
-export function estimateTrafficFromRoute(route) {
+function estimateTrafficFromRoute(route) {
   const steps = Array.isArray(route?.legs) ? route.legs.flatMap((l) => l?.steps || []) : [];
   if (!steps.length) return { risk: null, estimated: false };
   let weighted = 0;

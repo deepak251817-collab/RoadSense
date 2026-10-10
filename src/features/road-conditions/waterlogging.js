@@ -22,20 +22,20 @@ import { CONFIDENCE_BANDS } from "../safety/safetyScore";
 export const WATERLOGGING_LABEL = "Predictive estimate";
 
 /** Relative weight of each evidence factor (renormalized over available ones). */
-export const WATERLOGGING_WEIGHTS = {
+const WATERLOGGING_WEIGHTS = {
   rainfall: 0.45, // measured rainfall along the route
   reports: 0.35, // active user waterlogging reports near the route
   forecast: 0.20, // rain expected in the near forecast window
 };
 
 /** How far from the route (meters) a waterlogging report still counts. */
-export const WATERLOGGING_THRESHOLD_METERS = 150;
+const WATERLOGGING_THRESHOLD_METERS = 150;
 
 /**
  * Risk bands for a 0..100 waterlogging risk (higher = worse).
  * Colors match the segment-risk palette.
  */
-export const WATERLOGGING_BANDS = [
+const WATERLOGGING_BANDS = [
   { key: "severe", label: "Severe", min: 80, color: "#ef4444" },
   { key: "high", label: "High", min: 60, color: "#f97316" },
   { key: "moderate", label: "Moderate", min: 30, color: "#eab308" },
@@ -63,7 +63,7 @@ const clampRisk = (v) => Math.max(0, Math.min(100, Number(v) || 0));
  * @param {Object|null} payload OpenWeather point/entry (`{rain:{...}}`)
  * @returns {number|null}
  */
-export function rainfallMm(payload) {
+function rainfallMm(payload) {
   const rain = payload?.rain;
   if (!rain || typeof rain !== "object") return null;
   const one = Number(rain["1h"]);
@@ -101,7 +101,7 @@ export function rainfallRiskFromMm(mm) {
  * @param {number} [thresholdMeters]
  * @returns {{items:Array, count:number, highCount:number}}
  */
-export function collectWaterloggingReports(route, reports, _opts = {}, thresholdMeters = WATERLOGGING_THRESHOLD_METERS) {
+function collectWaterloggingReports(route, reports, _opts = {}, thresholdMeters = WATERLOGGING_THRESHOLD_METERS) {
   const empty = { items: [], count: 0, highCount: 0 };
   const coords = route?.geometry?.coordinates;
   if (!Array.isArray(coords) || coords.length < 2 || !Array.isArray(reports)) return empty;
@@ -124,7 +124,7 @@ export function collectWaterloggingReports(route, reports, _opts = {}, threshold
 }
 
 /** 0..100 risk from active waterlogging reports near the route. */
-export function waterloggingReportRisk({ count = 0, highCount = 0, distanceMeters = null } = {}) {
+function waterloggingReportRisk({ count = 0, highCount = 0, distanceMeters = null } = {}) {
   const total = Math.max(0, count || 0);
   if (total === 0) return 0;
   const high = Math.max(0, Math.min(highCount || 0, total));
