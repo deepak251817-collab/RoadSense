@@ -13,7 +13,7 @@
  * TTL cache).
  */
 import { distMeters, isValidCoord } from "../routing/geo";
-import { fetchJsonCached, clearHttpCache } from "../../services/httpClient";
+import { fetchJsonCached } from "../../services/httpClient";
 
 /** Honest label shown with every result. */
 export const EMERGENCY_SERVICES_LABEL = "Live OpenStreetMap data";
@@ -26,7 +26,7 @@ export const EMERGENCY_SERVICES_DISCLAIMER =
 export const SERVICES_RADIUS_METERS = 5000;
 
 /** Max results rendered. */
-export const SERVICES_MAX_RESULTS = 12;
+const SERVICES_MAX_RESULTS = 12;
 
 /** OSM TTL cache lifetime for the same area. */
 export const SERVICES_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -175,7 +175,3 @@ export async function fetchEmergencyServices(coord, { radiusMeters = SERVICES_RA
 	return { ok: false, services: [], fetchedAt, error };
 }
 
-/** Clear cached Overpass responses (used by tests / force refresh). */
-export function clearEmergencyServicesCache() {
-	clearHttpCache();
-}

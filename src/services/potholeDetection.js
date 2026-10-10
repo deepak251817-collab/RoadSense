@@ -269,11 +269,6 @@ export async function getBestLocation({ onUpdate, initialTimeoutMs = 8000, watch
   return best.coord ? best : null;
 }
 
-/** Validate a report coordinate before it is stored. */
-export function validateReportCoord(coord) {
-  return isValidCoord(coord);
-}
-
 /* ========================================================================== *
  * Pothole detector interface.
  *
@@ -346,37 +341,6 @@ export function getActiveDetector() {
 }
 
 const clamp01 = (v) => (Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0);
-
-/**
- * Run the active detector on an image and normalize its output.
- *
- * @param {string|Blob|ImageBitmap} image anything the registered detector accepts
- * @returns {Promise<{detected:boolean, confidence:number, severity:string|null, boxes:Array,
- *                     detector:{id:string,kind:string}, note?:string, error?:string}>}
- */
-export async function detectPothole(image) {
-  const detector = getActiveDetector();
-  try {
-    const raw = await detector.detect(image);
-    const severityRaw = raw?.severity != null ? String(raw.severity).toLowerCase() : null;
-    return {
-      detected: Boolean(raw?.detected) && clamp01(raw?.confidence) > 0,
-      confidence: clamp01(raw?.confidence),
-      severity: raw?.detected ? SEVERITY_MAP[severityRaw] || null : null,
-      boxes: Array.isArray(raw?.boxes) ? raw.boxes : [],
-      detector: { id: detector.id, kind: detector.kind },
-      ...(raw?.note ? { note: String(raw.note) } : {}),
-    };	} catch (e) {
-		return {
-			detected: false,
-			confidence: 0,
-			severity: null,
-			boxes: [],
-			detector: { id: detector.id, kind: detector.kind },
-			error: e?.message || "Pothole detector failed",
-		};
-	}
-}
 
 /* ------------------------------------------------------------------ *
  * Multi-detection facade (spec API: detectPotholes)

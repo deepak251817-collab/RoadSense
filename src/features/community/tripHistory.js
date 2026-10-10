@@ -89,11 +89,6 @@ export function replaceTrip(trips, trip) {
   return trips.map((t) => (t && t.id === trip.id ? trip : t));
 }
 
-/** True when the trip is still open (started but never ended). */
-export function isActiveTrip(trip) {
-  return Boolean(trip && typeof trip === "object" && trip.endedAt == null);
-}
-
 /** Validate one stored record; returns null when unusable. */
 function sanitizeTrip(raw) {
   if (!raw || typeof raw !== "object") return null;

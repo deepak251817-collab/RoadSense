@@ -6,17 +6,6 @@
  * "pothole" for backward compatibility).
  */
 
-/** Categories group types for dashboards and filters. */
-export const HAZARD_CATEGORIES = {
-  surface: "Road surface",
-  water: "Water",
-  obstacle: "Obstacle",
-  infrastructure: "Infrastructure",
-  work: "Road works",
-  conditions: "Conditions",
-  other: "Other",
-};
-
 /** Supported hazard types (order = form order). */
 export const HAZARD_TYPES = [
   { value: "pothole", label: "Pothole", category: "surface" },
@@ -58,13 +47,3 @@ export function isWaterloggingType(value) {
   return value === "waterlogging";
 }
 
-/** Group reports by hazard type value (legacy untyped → "pothole"). */
-export function groupReportsByType(reports) {
-  const groups = new Map();
-  for (const r of Array.isArray(reports) ? reports : []) {
-    const key = isPotholeType(r?.type) ? DEFAULT_HAZARD_TYPE : String(r.type);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(r);
-  }
-  return groups;
-}

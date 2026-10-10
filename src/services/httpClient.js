@@ -113,11 +113,6 @@ export async function fetchJson(url, opts = {}) {
 // ---- Tiny in-memory TTL cache (per-key expiry) ----
 const cache = new Map(); // key → { data, expiresAt }
 
-/** Clear the response cache (used by tests / "force refresh" paths). */
-export function clearHttpCache() {
-  cache.clear();
-}
-
 /**
  * fetchJson with a TTL cache. Cache hits skip the network entirely.
  *

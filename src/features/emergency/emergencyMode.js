@@ -36,7 +36,7 @@ export const EMERGENCY_NUMBERS = [
 export const EMERGENCY_NEARBY_RANGE_METERS = 300;
 
 /** Max entries shown per nearby list. */
-export const EMERGENCY_MAX_NEARBY = 3;
+const EMERGENCY_MAX_NEARBY = 3;
 
 /** Display labels for incident types (mirrors incidentService taxonomy). */
 const INCIDENT_LABELS = {

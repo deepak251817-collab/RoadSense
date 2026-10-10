@@ -29,7 +29,6 @@ export const MAX_CONFIRMATIONS = 20;
  * Read by the UI/tests to assert the invariant.
  */
 export const AUTOMATIC_VERIFICATION = false;
-export const CROWDSOURCING_LABEL = "Crowdsourced aggregation";
 
 const SEVERITY_RANK = { low: 1, moderate: 2, high: 3 };
 const rank = (sev) => SEVERITY_RANK[String(sev || "").toLowerCase()] || 0;

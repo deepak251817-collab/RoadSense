@@ -12,7 +12,7 @@
 import { distMeters, isValidCoord } from "../routing/geo";
 
 /** Default geographic threshold for "same hazard" (meters). */
-export const DEFAULT_CLUSTER_THRESHOLD_METERS = 50;
+const DEFAULT_CLUSTER_THRESHOLD_METERS = 50;
 
 const SEVERITY_RANK = { high: 3, moderate: 2, low: 1 };
 
