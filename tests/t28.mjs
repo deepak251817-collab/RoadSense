@@ -45,8 +45,10 @@ ok(/fetchExternalIncidents\([\s\S]{0,120}\}\)\.catch\(/.test(app), "incidents fe
 ok(/Notification\.requestPermission\(\)\.then\([\s\S]{0,80}\}\)\.catch\(/.test(app), "notification permission chain has .catch");
 ok((app.match(/reverseGeocode\(coord\[0\], coord\[1\]\)\.catch\(\(\) => null\)\.then\(/g) || []).length === 4,
   "all 4 reverseGeocode call sites recover with .catch(() => null)");
-ok((app.match(/geocode\((sourceQuery|destQuery|stopSearchQuery)\)\.catch\(\(\) => \[\]\)\.then\(/g) || []).length === 3,
-  "all 3 autocomplete geocode chains recover with .catch(() => [])");
+ok((app.match(/geocode\((sourceQuery|destQuery|stopSearchQuery)\)/g) || []).length === 3,
+  "all 3 autocomplete inputs call geocode");
+ok((app.match(/geocode\((sourceQuery|destQuery|stopSearchQuery)\)[\s\S]{0,200}\.catch\(/g) || []).length === 3,
+  "all 3 autocomplete geocode chains handle failure (clear suggestions + status)");
 ok(/\.catch\(\(\) => \{ if \(!cancelled\) setRouteForecast\(null\); \}\)/.test(app),
   "route forecast chain keeps its .catch handler (no regression)");
 

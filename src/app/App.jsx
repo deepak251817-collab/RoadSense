@@ -133,6 +133,9 @@ export default function App() {
 	const [destQuery, setDestQuery] = useState("");
 	const [sourceSuggestions, setSourceSuggestions] = useState([]);
 	const [destSuggestions, setDestSuggestions] = useState([]);
+	// Geocode suggestion status per input: idle | searching | done | failed
+	const [srcGeoStatus, setSrcGeoStatus] = useState("idle");
+	const [dstGeoStatus, setDstGeoStatus] = useState("idle");
 	// Autocomplete lock: after selecting a suggestion or programmatic fill, keep hidden until user types again
 	const [sourceLocked, setSourceLocked] = useState(false);
 	const [destLocked, setDestLocked] = useState(false);
@@ -781,10 +784,14 @@ export default function App() {
 		if (srcTimer.current) clearTimeout(srcTimer.current);
 		if (!sourceQuery || sourceQuery.length < 3 || sourceLocked) {
 			setSourceSuggestions([]);
+			setSrcGeoStatus("idle");
 			return;
 		}
+		setSrcGeoStatus("searching");
 		srcTimer.current = setTimeout(() => {
-			geocode(sourceQuery).catch(() => []).then(setSourceSuggestions);
+			geocode(sourceQuery)
+				.then((r) => { setSourceSuggestions(r); setSrcGeoStatus("done"); })
+				.catch(() => { setSourceSuggestions([]); setSrcGeoStatus("failed"); });
 		}, 300);
 		return () => srcTimer.current && clearTimeout(srcTimer.current);
 	}, [sourceQuery, sourceLocked]);
@@ -793,10 +800,14 @@ export default function App() {
 		if (dstTimer.current) clearTimeout(dstTimer.current);
 		if (!destQuery || destQuery.length < 3 || destLocked) {
 			setDestSuggestions([]);
+			setDstGeoStatus("idle");
 			return;
 		}
+		setDstGeoStatus("searching");
 		dstTimer.current = setTimeout(() => {
-			geocode(destQuery).catch(() => []).then(setDestSuggestions);
+			geocode(destQuery)
+				.then((r) => { setDestSuggestions(r); setDstGeoStatus("done"); })
+				.catch(() => { setDestSuggestions([]); setDstGeoStatus("failed"); });
 		}, 300);
 		return () => dstTimer.current && clearTimeout(dstTimer.current);
 	}, [destQuery, destLocked]);
@@ -1466,7 +1477,7 @@ export default function App() {
 			// Pull live traffic for every alternative so all routes get a full analysis
 			routesData.forEach((_, i) => { try { fetchTrafficForRoute(i); } catch { } });
 		} catch (e) {
-			setMapError(e.message || "Failed to fetch routes");
+			setMapError(`Route calculation could not be completed${e.message ? ` (${e.message})` : ""}. The map, reports and other panels remain available.`);
 		} finally {
 			setRoutesLoading(false);
 		}
@@ -3519,12 +3530,17 @@ export default function App() {
 												{s.name}
 											</li>
 										))}
-									</ul>
+									</ul>								)}
+								{srcGeoStatus === "failed" && (
+									<p className="text-xs text-red-600 dark:text-red-400 mt-1" role="status">Place search is unavailable right now — pick the point on the map instead.</p>
+								)}
+								{srcGeoStatus === "done" && sourceSuggestions.length === 0 && (
+									<p className="text-xs text-gray-500 dark:text-gray-400 mt-1" role="status">No matching places found. Try a more specific search, or use Pick origin.</p>
 								)}
 							</div>
 
-							<div className="relative">
-								<label htmlFor="destination-input" className="stars-label mb-2 block">Destination</label>
+						<div className="relative">
+							<label htmlFor="destination-input" className="stars-label mb-2 block">Destination</label>
 								<input
 									id="destination-input"
 									type="text"
@@ -3553,6 +3569,12 @@ export default function App() {
 											</li>
 										))}
 									</ul>
+								)}
+								{dstGeoStatus === "failed" && (
+									<p className="text-xs text-red-600 dark:text-red-400 mt-1" role="status">Place search is unavailable right now — pick the point on the map instead.</p>
+								)}
+								{dstGeoStatus === "done" && destSuggestions.length === 0 && (
+									<p className="text-xs text-gray-500 dark:text-gray-400 mt-1" role="status">No matching places found. Try a more specific search, or use Pick destination.</p>
 								)}
 							</div>
 						</div>
