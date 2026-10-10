@@ -10,6 +10,7 @@ import RepairPriorityPanel from "../../features/admin/RepairPriorityPanel";
 import WhatIfPanel from "../../features/routing/WhatIfPanel";
 import MunicipalDashboard from "../../features/admin/MunicipalDashboard";
 import RoutePreferencesPanel from "../../features/routing/RoutePreferencesPanel";
+import { FACTOR_LABELS } from "../../features/safety/safetyScore";
 
 // Lazy: keeps the chart library and prediction UI out of the initial bundle
 const AnalyticsPanel = React.lazy(() => import("../../features/community/AnalyticsPanel"));
@@ -79,24 +80,42 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 					<div>
 						<h2 className="stars-h2">Road Safety</h2>
 						<p className="stars-caption">Overall safety for your routes plus advanced risk estimates. Every figure is computed from live route, incident and hazard-report data — nothing is simulated.</p>
-					</div>
-					<div className="stars-card p-4 sm:p-6">
-						<h3 className="stars-h3 mb-3">Overall safety</h3>
-						{routeAnalyses.length === 0 ? (
+					</div>							<div className="stars-card p-4 sm:p-6">
+								<h3 className="stars-h3 mb-1">Overall safety</h3>
+								<p className="text-xs text-gray-500 dark:text-gray-400 mb-3">The score (0–100) ranks each route from live traffic, hazard reports, weather, incidents and time of day. Confidence is shown separately — it reflects how much of that data existed, not how safe the route is. Panels below are labeled estimates, never guarantees.</p>
+								{routeAnalyses.length === 0 ? (
 							<p className="stars-empty">No routes analyzed yet. Find a route on the Navigate screen to see safety scores, risk factors and the recommendation here.</p>
 						) : (
-							<>
-								<ul className="space-y-2" role="list">
-									{routeAnalyses.map((a, i) => (
-										<li key={i} className="flex items-center justify-between gap-3 text-sm">
-											<span className="font-medium text-gray-800 dark:text-gray-100 inline-flex items-center gap-2">
-												Route {i + 1}
-												{recommendation?.recommendedIndex === i && <span className="stars-badge-ok">Recommended</span>}
-											</span>
-											<span className="font-bold" style={{ color: a.classification?.color }}>{a.classification?.label} · {a.score}/100</span>
-										</li>
-									))}
-								</ul>
+							<>											<ul className="space-y-3" role="list">
+												{routeAnalyses.map((a, i) => (
+													<li key={i}>
+														<div className="flex items-center justify-between gap-3 text-sm">
+															<span className="font-medium text-gray-800 dark:text-gray-100 inline-flex items-center gap-2">
+																Route {i + 1}
+																{recommendation?.recommendedIndex === i && <span className="stars-badge-ok">Recommended</span>}
+															</span>
+															<span className="font-bold" style={{ color: a.classification?.color }}>{a.classification?.label} · {a.score}/100</span>
+														</div>
+														<div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+															<span
+																className="px-1.5 py-0.5 rounded-full font-semibold border"
+																style={{ color: a.confidence?.color, borderColor: a.confidence?.color }}
+																title={(a.confidence?.reasons || []).join(" · ")}
+															>
+																Confidence: {a.confidence?.label} ({a.confidence?.availableFactors}/{a.confidence?.totalFactors} factors)
+															</span>
+															{Object.entries(a.factorRisks || {}).map(([k, v]) => (
+																<span key={k} className="text-gray-500 dark:text-gray-400" title={`${FACTOR_LABELS[k] || k} risk ${Math.round(v)}/100 (higher = more risk)`}>
+																	{FACTOR_LABELS[k] || k}: {Math.round(v)}
+																</span>
+															))}
+															{(a.missingFactors || []).length > 0 && (
+																<span className="text-amber-700 dark:text-amber-400">Insufficient data: {a.missingFactors.map((k) => FACTOR_LABELS[k] || k).join(", ")}</span>
+															)}
+														</div>
+													</li>
+												))}
+											</ul>
 								{recommendationReasons.length > 0 && (
 									<div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
 										<h4 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Why this route</h4>

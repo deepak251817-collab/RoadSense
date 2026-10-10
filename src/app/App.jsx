@@ -16,7 +16,7 @@ import { assessReportConfidence, locationConfidence } from "../features/safety/c
 import { HAZARD_TYPES, DEFAULT_HAZARD_TYPE, hazardTypeMeta } from "../features/safety/hazardTypes";
 import { buildSafetyHeatmapData } from "../features/safety/heatmap";
 import { detectHotspots } from "../features/safety/hotspots";
-import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore } from "../features/safety/safetyScore";
+import { hourlyTimeRiskProfile, getSafestWindow, calculateRoadSafetyScore, FACTOR_LABELS } from "../features/safety/safetyScore";
 import { predictRoadRiskAllHorizons } from "../features/safety/prediction";
 import {
   endAdminSession,
@@ -4256,40 +4256,36 @@ export default function App() {
 									</div>
 								)}
 
-								{String(openDetailsId) === String(idx) && (
-												<div className="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2">
-													<h3 className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">Turn-by-turn steps</h3>
-													<ol className="list-decimal ml-5 space-y-1 text-xs">
-														{getStepsForRoute(r).map((step, sIdx) => (
-															<li key={sIdx} className="flex items-start justify-between gap-3">
-																<span className="pr-2">
-																	{(() => {
-																		const base = step?.maneuver?.instruction || step?.name || 'Continue';
-																		// Append stop labels if a stop is near this step start
-																		try {
-																			if (Array.isArray(stops) && stops.length && Array.isArray(step?.maneuver?.location)) {
-																				const loc = step.maneuver.location; // [lng,lat]
-																				const nearStops = stops
-																					.map((st, i) => ({ st, i, d: distMeters(st, loc) }))
-																					.filter(o => o.d < 80) // within 80m of step start
-																					.sort((a, b) => a.d - b.d);
-																				if (nearStops.length) {
-																					const labels = nearStops.slice(0, 2).map(o => `Stop ${o.i + 1}`).join(', ');
-																					return base + ` (near ${labels})`;
-																				}
-																			}
-																		} catch { }
-																		return base;
-																	})()}
-																</span>
-																<span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
-																	{formatDistance(step?.distance || 0)} · {formatDuration(step?.duration || 0)}
-																</span>
-															</li>
-														))}
-													</ol>
-												</div>
+								{String(openDetailsId) === String(idx) && (() => {
+									const ana = routeAnalyses.find((a) => a.index === idx);
+									if (!ana) return null;
+									return (
+										<div className="mt-2 rounded border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3">
+											<h3 className="text-xs font-semibold mb-2 text-gray-700 dark:text-gray-300">Safety analysis</h3>
+											<div className="flex flex-wrap items-center gap-2 mb-2 text-xs">
+												<span className="px-2 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: ana.classification?.color }}>{ana.classification?.label} {ana.score}/100</span>
+												<span className="px-2 py-0.5 rounded-full font-semibold border" style={{ color: ana.confidence?.color, borderColor: ana.confidence?.color }} title={(ana.confidence?.reasons || []).join(" · ")}>Confidence: {ana.confidence?.label}</span>
+												<span className="text-gray-500 dark:text-gray-400">{ana.confidence?.availableFactors}/{ana.confidence?.totalFactors} factors with data</span>
+											</div>
+											<p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">The score (0–100) ranks route safety from traffic, surface reports, weather, incidents and time of day. Confidence is shown separately — it reflects how much of that data actually existed, not how safe the route is.</p>
+											<ul className="space-y-1" aria-label="Factor risk breakdown">
+												{Object.entries(ana.factorRisks || {}).map(([k, v]) => (
+													<li key={k} className="flex items-center gap-2 text-[11px]">
+														<span className="w-28 shrink-0 text-gray-600 dark:text-gray-300">{FACTOR_LABELS[k] || k}</span>
+														<span className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+															<span className="block h-full rounded-full" style={{ width: `${Math.round(v)}%`, backgroundColor: v >= 70 ? "#dc2626" : v >= 50 ? "#d97706" : "#16a34a" }} />
+														</span>
+														<span className="w-8 text-right text-gray-500 dark:text-gray-400">{Math.round(v)}</span>
+													</li>
+												))}
+											</ul>
+											<p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Per-factor risk 0–100 (higher = more risk).</p>
+											{(ana.missingFactors || []).length > 0 && (
+												<p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">Insufficient data for: {ana.missingFactors.map((k) => FACTOR_LABELS[k] || k).join(", ")} — the score was computed from the remaining factors.</p>
 											)}
+										</div>
+									);
+								})()}
 
 
 
@@ -4438,7 +4434,18 @@ export default function App() {
 								</p>
 								<ol className="space-y-1.5 max-h-64 overflow-auto pr-1" aria-label={`Directions for route ${Number(selectedRouteId) + 1}`}>
 									{selSteps.map((s, i) => {
-										const text = s.maneuver?.instruction || s.instruction || (s.name ? `Continue on ${s.name}` : "Continue");
+										let text = s.maneuver?.instruction || s.instruction || (s.name ? `Continue on ${s.name}` : "Continue");
+										// Annotate steps that begin near a planned stop
+										try {
+											if (Array.isArray(stops) && stops.length && Array.isArray(s?.maneuver?.location)) {
+												const loc = s.maneuver.location;
+												const nearStops = stops
+													.map((st, si) => ({ si, d: distMeters(st, loc) }))
+													.filter((o) => o.d < 80)
+													.sort((a, b) => a.d - b.d);
+												if (nearStops.length) text += ` (near ${nearStops.slice(0, 2).map((o) => `Stop ${o.si + 1}`).join(", ")})`;
+											}
+										} catch { }
 										const dist = s.distance >= 1000 ? `${(s.distance / 1000).toFixed(1)} km` : `${Math.round(s.distance || 0)} m`;
 										return (
 											<li key={i} className="flex items-start gap-2 text-[13px] text-gray-700 dark:text-gray-200">
