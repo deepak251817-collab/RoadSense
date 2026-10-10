@@ -109,6 +109,16 @@ const CLUSTER_THRESHOLD_METERS = 50;
 
 // Report pothole section will be rendered later in JSX (standalone card)
 
+/** Top-level application sections (target information architecture). */
+const STARS_SECTIONS = [
+	{ key: "navigate", label: "Navigate", icon: Compass },
+	{ key: "safety", label: "Road Safety", icon: ShieldCheck },
+	{ key: "report", label: "Report a Hazard", icon: AlertTriangle },
+	{ key: "trips", label: "Trips", icon: List },
+	{ key: "intelligence", label: "Road Intelligence", icon: Activity },
+	{ key: "settings", label: "Settings", icon: Settings },
+];
+
 export default function App() {
 	const mapContainerRef = useRef(null);
 	const sourceInputRef = useRef(null);
@@ -215,6 +225,40 @@ export default function App() {
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
 	const [showTrips, setShowTrips] = useState(false);
+	// ---- Top-level section navigation (Navigate / Road Safety / Report a Hazard / Trips / Road Intelligence / Settings) ----
+	const [activeSection, setActiveSection] = useState("navigate");
+	// Panels the user folded away *within* a section (independent of the map dock toggles)
+	const [sectionHidden, setSectionHidden] = useState({});
+	const sec = (key) => !sectionHidden[key];
+	const secToggle = (key) => setSectionHidden((s) => ({ ...s, [key]: !s[key] }));
+	const secHide = (key) => setSectionHidden((s) => ({ ...s, [key]: true }));
+	const sectionChips = (items) => {
+		if (!items.length) return null;
+		return (
+			<div className="flex flex-wrap gap-2" role="group" aria-label="Show or hide section panels">
+				{items.map((it) => {
+					const on = sec(it.key);
+					return (
+						<button
+							key={it.key}
+							type="button"
+							aria-pressed={on}
+							onClick={() => secToggle(it.key)}
+							className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${on ? "border-primary-600 bg-primary-600 text-white" : "border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
+						>
+							{it.label}
+						</button>
+					);
+				})}
+			</div>
+		);
+	};
+	// The map stays mounted while a section is open; re-measure it when Navigate returns
+	useEffect(() => {
+		if (activeSection !== "navigate") return;
+		const id = requestAnimationFrame(() => { try { window._mapInstance?.resize(); } catch { } });
+		return () => cancelAnimationFrame(id);
+	}, [activeSection]);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState(null);
@@ -2952,6 +2996,204 @@ export default function App() {
 		{ label: 'Navigate', done: routes.length > 0 && selectedRouteId != null },
 	];
 
+	// Report-a-hazard card, shared by the Navigate view and the Report section
+	const reportCardEl = (
+						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
+						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h2>
+						<p className="text-xs text-gray-600 dark:text-gray-300 mb-4">Report potholes, broken roads, waterlogging, debris, closures and other road-safety conditions. Your reports are stored locally in this browser (no server upload).</p>
+						<div className="space-y-4">
+							{/* Hazard type selector */}
+							<div>
+								<label htmlFor="hazard-type-select" className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Hazard type</label>
+								<select
+									id="hazard-type-select"
+									value={reportForm.type || DEFAULT_HAZARD_TYPE}
+									onChange={(e) => setReportForm((f) => ({ ...f, type: e.target.value }))}
+									className="mt-1 w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+								>
+									{HAZARD_TYPES.map((t) => (
+										<option key={t.value} value={t.value}>{t.label}</option>
+									))}
+								</select>
+							</div>
+							{/* Severity selector */}
+							<div>
+								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Severity Level</label>
+								<div className="mt-2 flex gap-3">
+									{[
+										{ key: "low", icon: lowIcon, label: "Low" },
+										{ key: "moderate", icon: moderateIcon, label: "Moderate" },
+										{ key: "high", icon: highIcon, label: "High" },
+									].map((opt) => (
+										<button
+											key={opt.key}
+											type="button"
+											onClick={() => setReportForm((f) => ({ ...f, severity: opt.key }))}
+											className={`flex flex-col items-center px-3 py-2 rounded-control border text-xs font-medium transition-colors duration-150 ${reportForm.severity === opt.key ? "border-primary-500 bg-primary-100 dark:bg-primary-900/40 shadow-card" : "border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
+										>
+											<img src={opt.icon} alt={opt.label} className="w-10 h-10 object-contain" />
+											<span>{opt.label}</span>
+										</button>
+									))}
+								</div>
+							</div>
+
+							{/* Description */}
+							<div>
+								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Description</label>
+								<textarea
+									value={reportForm.description}
+									onChange={(e) => setReportForm((f) => ({ ...f, description: e.target.value }))}
+									placeholder="Short note (e.g. deep hole near curb)"
+									className="mt-1 w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 shadow-sm hover:shadow-md"
+									rows={3}
+								/>
+							</div>							{/* Photo upload */}
+							<div>
+								<label className="text-[11px] font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1"><Upload className="w-3.5 h-3.5" /> Photo</label>
+								<div className="mt-1 flex items-center gap-2">
+									<button type="button" onClick={() => openCameraModal('report')} className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 inline-flex items-center gap-1">
+										<Camera className="w-3.5 h-3.5" /> Use camera
+									</button>
+									<span className="text-[10px] text-gray-500">or upload from gallery</span>
+								</div>
+								<input
+									type="file"
+									accept="image/*"
+									capture="environment"									onChange={(e) => {
+										const file = e.target.files?.[0];
+										if (!file) return;
+										handleImageSelected(file, 'report');
+									}}
+									className="mt-1 w-full text-xs"
+								/>
+								{reportForm.photoPreview && (
+									<div className="mt-2 flex items-center gap-2">
+										<img
+											src={reportForm.photoPreview}
+											alt="preview"
+											className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-gray-700 cursor-zoom-in"
+											onClick={() => openImageModal(reportForm.photoPreview, 'Reported photo')}
+										/>
+										<button
+											onClick={() => setReportForm((f) => ({ ...f, photoPreview: null, coord: null }))}
+											className="text-[10px] px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+										>
+											Remove
+										</button>
+									</div>
+								)}
+								{reportForm.photoPreview && (
+									<div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-2">
+										{ocrBusy && <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" aria-label="loading" />}
+										{reportForm.coord ? (
+											<span>Location detected: {reportForm.coord[1].toFixed(5)}, {reportForm.coord[0].toFixed(5)}</span>
+										) : (
+											<span className="flex items-center gap-2">
+												{reportForm.photoSource === 'camera'
+													? (ocrMessage || 'Fetching live location…')
+													: <>No GPS geotag in EXIF. {ocrMessage || ''}</>
+												}
+												<button type="button" onClick={requestPreciseLocationNow} className="px-2 py-0.5 text-[10px] rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">Retry location</button>
+												<button type="button" onClick={setLocationOnMapNow} className="px-2 py-0.5 text-[10px] rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">Set location on map</button>
+											</span>
+										)}
+									</div>
+								)}
+								{reportForm.photoPreview && (() => {
+									const locConf = locationConfidence(reportForm.coordSource);
+									const det = reportForm.detection;
+									return (
+										<div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 space-y-0.5" role="group" aria-label="Image analysis workflow">
+											<div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Image analysis</div>
+											<div className="text-[10px] text-gray-600 dark:text-gray-300">
+												{ocrBusy ? "⋯ Validating image and extracting location…" : "✓ Image validated"}
+											</div>
+											<div className="text-[10px]" style={{ color: reportForm.coord ? locConf.color : "#6b7280" }}>
+												● Location confidence: {locConf.label}
+											</div>
+											<div className="text-[10px] text-indigo-700 dark:text-indigo-300">
+												{det && det.detected
+													? `● AI detection confidence: ${Math.round((det.confidence || 0) * 100)}%${det.severity ? ` · ${det.severity}` : ""} · ${det.detections?.length || 1} finding(s) · assistive only`
+													: "● AI detection: no model configured — manual confirmation below"}
+											</div>
+											<div className="text-[10px] text-gray-600 dark:text-gray-300">
+												● Severity (confirmed by you): <span className="font-semibold uppercase">{reportForm.severity}</span>
+											</div>
+										</div>
+									);
+								})()}
+							</div>
+
+							{/* Submit */}
+							<div className="pt-1">
+								<button
+									onClick={submitPotholeReport}
+									disabled={!reportForm.photoPreview || !reportForm.description || !reportForm.coord}
+									className="px-4 py-2 rounded-md text-sm font-medium bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition shadow-sm"
+								>
+									Submit report
+								</button>
+								{reportForm.photoPreview && !reportForm.coord && reportForm.photoSource === 'upload' && (
+									<div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
+										<span>This photo doesn't contain a GPS geotag. Enable location services when taking the photo to include coordinates.</span>
+										<button type="button" onClick={setLocationOnMapNow} className="ml-auto px-2 py-1 text-xs rounded border border-yellow-300 hover:bg-yellow-100">Set location on map</button>
+									</div>
+								)}
+							</div>
+						</div>
+
+						{/* Existing reports */}
+						{userReports.filter(r => !r.hiddenForUser || adminMode).length > 0 && (
+							<div className="mt-4">
+								<div className="text-[11px] font-semibold mb-1">Your reports ({userReports.filter(r => !r.hiddenForUser || adminMode).length})</div>
+								<ul className="max-h-40 overflow-auto divide-y divide-gray-200 dark:divide-gray-700">
+									{userReports.slice().reverse().filter(r => !r.hiddenForUser || adminMode).map((r) => (
+										<li key={r.id} className="py-2 text-[11px] flex items-start gap-2">
+											<img src={r.severity === "high" ? highIcon : r.severity === "moderate" ? moderateIcon : lowIcon} alt={r.severity} className="w-8 h-8 object-contain flex-shrink-0 drop-shadow" />
+											<div className="flex-1 min-w-0">
+												<div className="font-medium truncate">{r.description || "(no description)"}</div>
+												<div className="text-gray-500 dark:text-gray-400 truncate">
+													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {r.severity} • {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
+													{r.pendingFixReview && <span className="ml-2 px-1 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">Fix proof pending</span>}
+												</div>
+												{r.pendingFixReview && r.fixProofPhotoDataUrl && (
+													<div className="mt-1 flex items-center gap-2">
+														<img src={r.fixProofPhotoDataUrl} alt="fix proof" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-zoom-in" onClick={() => openImageModal(r.fixProofPhotoDataUrl, `Fix proof • ${r.fixRequestedAt ? new Date(r.fixRequestedAt).toLocaleString() : ''}`)} />
+														<div className="text-gray-500 dark:text-gray-400">
+															<div>Submitted: {r.fixRequestedAt ? new Date(r.fixRequestedAt).toLocaleString() : '—'}</div>
+															{Array.isArray(r.fixProofCoord) && <div>Fix location: {r.fixProofCoord[1].toFixed(5)}, {r.fixProofCoord[0].toFixed(5)}</div>}
+															<div className="text-[10px]">Awaiting admin review</div>
+														</div>
+													</div>
+												)}
+												<div className="mt-1 flex gap-2 flex-wrap">
+													<button
+														onClick={() => { const map = window._mapInstance; if (map) map.flyTo({ center: r.coord, zoom: 16 }); }}
+														className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+													>
+														View
+													</button>
+													{!adminMode && r.status !== 'fixed' && !r.pendingFixReview && !r.hiddenGlobally && (
+														<button onClick={() => openFixModal(r.id)} className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">Mark pothole fixed</button>
+													)}
+													{adminMode ? (
+														<button onClick={() => deleteReport(r.id)} className="px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30">Delete</button>
+													) : (
+														<button onClick={() => requestDeleteReport(r.id)} className="px-2 py-1 rounded border border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30">Request delete</button>
+													)}
+													{/* Severity editing removed for regular user; only admins can change level */}
+												</div>
+											</div>
+										</li>
+									))}
+								</ul>
+								<div className="mt-2 text-[10px] text-gray-500">Reports are saved locally. Clearing browser storage will remove them.</div>
+							</div>
+						)}
+					</div>
+	);
+
 	return (
 		<div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
 			{/* Accessibility: keyboard users can jump past the header */}
@@ -2991,6 +3233,26 @@ export default function App() {
 						<ShieldCheck className="w-4 h-4" /> {adminMode ? 'Admin Mode' : 'Admin'}
 					</button>
 				</div>
+				<nav aria-label="STARS sections" className="border-t border-gray-100 dark:border-gray-800">
+					<div className="max-w-7xl mx-auto px-2 sm:px-4 flex items-center gap-1 overflow-x-auto">
+						{STARS_SECTIONS.map((s) => {
+							const Icon = s.icon;
+							const active = activeSection === s.key;
+							return (
+								<button
+									key={s.key}
+									type="button"
+									onClick={() => { setActiveSection(s.key); setSectionHidden({}); }}
+									aria-current={active ? "page" : undefined}
+									className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${active ? "border-primary-600 text-primary-700 dark:text-primary-300" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"}`}
+								>
+									<Icon className="w-4 h-4" aria-hidden="true" />
+									{s.label}
+								</button>
+							);
+						})}
+					</div>
+				</nav>
 			</header>
 
 			{/* Notice banner */}
@@ -3179,7 +3441,7 @@ export default function App() {
 				</div>
 			)}
 
-			<main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+			<main id={activeSection === "navigate" ? "main-content" : undefined} tabIndex={-1} className={`max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8${activeSection === "navigate" ? "" : " hidden"}`}>
 				<section className="lg:col-span-2 space-y-6">
 					{/* Controls */}
 					<div ref={reportCardRef} className="stars-card p-4 sm:p-6">
@@ -4160,201 +4422,8 @@ export default function App() {
 							</ul>
 						</div>
 					)}
-					{/* User pothole reporting card */}
-					<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h2>
-						<p className="text-xs text-gray-600 dark:text-gray-300 mb-4">Report potholes, broken roads, waterlogging, debris, closures and other road-safety conditions. Your reports are stored locally in this browser (no server upload).</p>
-						<div className="space-y-4">
-							{/* Hazard type selector */}
-							<div>
-								<label htmlFor="hazard-type-select" className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Hazard type</label>
-								<select
-									id="hazard-type-select"
-									value={reportForm.type || DEFAULT_HAZARD_TYPE}
-									onChange={(e) => setReportForm((f) => ({ ...f, type: e.target.value }))}
-									className="mt-1 w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-								>
-									{HAZARD_TYPES.map((t) => (
-										<option key={t.value} value={t.value}>{t.label}</option>
-									))}
-								</select>
-							</div>
-							{/* Severity selector */}
-							<div>
-								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Severity Level</label>
-								<div className="mt-2 flex gap-3">
-									{[
-										{ key: "low", icon: lowIcon, label: "Low" },
-										{ key: "moderate", icon: moderateIcon, label: "Moderate" },
-										{ key: "high", icon: highIcon, label: "High" },
-									].map((opt) => (
-										<button
-											key={opt.key}
-											type="button"
-											onClick={() => setReportForm((f) => ({ ...f, severity: opt.key }))}
-											className={`flex flex-col items-center px-3 py-2 rounded-control border text-xs font-medium transition-colors duration-150 ${reportForm.severity === opt.key ? "border-primary-500 bg-primary-100 dark:bg-primary-900/40 shadow-card" : "border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"}`}
-										>
-											<img src={opt.icon} alt={opt.label} className="w-10 h-10 object-contain" />
-											<span>{opt.label}</span>
-										</button>
-									))}
-								</div>
-							</div>
-
-							{/* Description */}
-							<div>
-								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Description</label>
-								<textarea
-									value={reportForm.description}
-									onChange={(e) => setReportForm((f) => ({ ...f, description: e.target.value }))}
-									placeholder="Short note (e.g. deep hole near curb)"
-									className="mt-1 w-full rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 shadow-sm hover:shadow-md"
-									rows={3}
-								/>
-							</div>							{/* Photo upload */}
-							<div>
-								<label className="text-[11px] font-medium text-gray-700 dark:text-gray-200 flex items-center gap-1"><Upload className="w-3.5 h-3.5" /> Photo</label>
-								<div className="mt-1 flex items-center gap-2">
-									<button type="button" onClick={() => openCameraModal('report')} className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 inline-flex items-center gap-1">
-										<Camera className="w-3.5 h-3.5" /> Use camera
-									</button>
-									<span className="text-[10px] text-gray-500">or upload from gallery</span>
-								</div>
-								<input
-									type="file"
-									accept="image/*"
-									capture="environment"									onChange={(e) => {
-										const file = e.target.files?.[0];
-										if (!file) return;
-										handleImageSelected(file, 'report');
-									}}
-									className="mt-1 w-full text-xs"
-								/>
-								{reportForm.photoPreview && (
-									<div className="mt-2 flex items-center gap-2">
-										<img
-											src={reportForm.photoPreview}
-											alt="preview"
-											className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-gray-700 cursor-zoom-in"
-											onClick={() => openImageModal(reportForm.photoPreview, 'Reported photo')}
-										/>
-										<button
-											onClick={() => setReportForm((f) => ({ ...f, photoPreview: null, coord: null }))}
-											className="text-[10px] px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-										>
-											Remove
-										</button>
-									</div>
-								)}
-								{reportForm.photoPreview && (
-									<div className="mt-1 text-[10px] text-gray-600 dark:text-gray-400 flex items-center gap-2">
-										{ocrBusy && <span className="inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" aria-label="loading" />}
-										{reportForm.coord ? (
-											<span>Location detected: {reportForm.coord[1].toFixed(5)}, {reportForm.coord[0].toFixed(5)}</span>
-										) : (
-											<span className="flex items-center gap-2">
-												{reportForm.photoSource === 'camera'
-													? (ocrMessage || 'Fetching live location…')
-													: <>No GPS geotag in EXIF. {ocrMessage || ''}</>
-												}
-												<button type="button" onClick={requestPreciseLocationNow} className="px-2 py-0.5 text-[10px] rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">Retry location</button>
-												<button type="button" onClick={setLocationOnMapNow} className="px-2 py-0.5 text-[10px] rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">Set location on map</button>
-											</span>
-										)}
-									</div>
-								)}
-								{reportForm.photoPreview && (() => {
-									const locConf = locationConfidence(reportForm.coordSource);
-									const det = reportForm.detection;
-									return (
-										<div className="mt-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2 space-y-0.5" role="group" aria-label="Image analysis workflow">
-											<div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400">Image analysis</div>
-											<div className="text-[10px] text-gray-600 dark:text-gray-300">
-												{ocrBusy ? "⋯ Validating image and extracting location…" : "✓ Image validated"}
-											</div>
-											<div className="text-[10px]" style={{ color: reportForm.coord ? locConf.color : "#6b7280" }}>
-												● Location confidence: {locConf.label}
-											</div>
-											<div className="text-[10px] text-indigo-700 dark:text-indigo-300">
-												{det && det.detected
-													? `● AI detection confidence: ${Math.round((det.confidence || 0) * 100)}%${det.severity ? ` · ${det.severity}` : ""} · ${det.detections?.length || 1} finding(s) · assistive only`
-													: "● AI detection: no model configured — manual confirmation below"}
-											</div>
-											<div className="text-[10px] text-gray-600 dark:text-gray-300">
-												● Severity (confirmed by you): <span className="font-semibold uppercase">{reportForm.severity}</span>
-											</div>
-										</div>
-									);
-								})()}
-							</div>
-
-							{/* Submit */}
-							<div className="pt-1">
-								<button
-									onClick={submitPotholeReport}
-									disabled={!reportForm.photoPreview || !reportForm.description || !reportForm.coord}
-									className="px-4 py-2 rounded-md text-sm font-medium bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition shadow-sm"
-								>
-									Submit report
-								</button>
-								{reportForm.photoPreview && !reportForm.coord && reportForm.photoSource === 'upload' && (
-									<div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
-										<span>This photo doesn't contain a GPS geotag. Enable location services when taking the photo to include coordinates.</span>
-										<button type="button" onClick={setLocationOnMapNow} className="ml-auto px-2 py-1 text-xs rounded border border-yellow-300 hover:bg-yellow-100">Set location on map</button>
-									</div>
-								)}
-							</div>
-						</div>
-
-						{/* Existing reports */}
-						{userReports.filter(r => !r.hiddenForUser || adminMode).length > 0 && (
-							<div className="mt-4">
-								<div className="text-[11px] font-semibold mb-1">Your reports ({userReports.filter(r => !r.hiddenForUser || adminMode).length})</div>
-								<ul className="max-h-40 overflow-auto divide-y divide-gray-200 dark:divide-gray-700">
-									{userReports.slice().reverse().filter(r => !r.hiddenForUser || adminMode).map((r) => (
-										<li key={r.id} className="py-2 text-[11px] flex items-start gap-2">
-											<img src={r.severity === "high" ? highIcon : r.severity === "moderate" ? moderateIcon : lowIcon} alt={r.severity} className="w-8 h-8 object-contain flex-shrink-0 drop-shadow" />
-											<div className="flex-1 min-w-0">
-												<div className="font-medium truncate">{r.description || "(no description)"}</div>
-												<div className="text-gray-500 dark:text-gray-400 truncate">
-													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {r.severity} • {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
-													{r.pendingFixReview && <span className="ml-2 px-1 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">Fix proof pending</span>}
-												</div>
-												{r.pendingFixReview && r.fixProofPhotoDataUrl && (
-													<div className="mt-1 flex items-center gap-2">
-														<img src={r.fixProofPhotoDataUrl} alt="fix proof" className="w-16 h-16 object-cover rounded border border-gray-200 dark:border-gray-700 cursor-zoom-in" onClick={() => openImageModal(r.fixProofPhotoDataUrl, `Fix proof • ${r.fixRequestedAt ? new Date(r.fixRequestedAt).toLocaleString() : ''}`)} />
-														<div className="text-gray-500 dark:text-gray-400">
-															<div>Submitted: {r.fixRequestedAt ? new Date(r.fixRequestedAt).toLocaleString() : '—'}</div>
-															{Array.isArray(r.fixProofCoord) && <div>Fix location: {r.fixProofCoord[1].toFixed(5)}, {r.fixProofCoord[0].toFixed(5)}</div>}
-															<div className="text-[10px]">Awaiting admin review</div>
-														</div>
-													</div>
-												)}
-												<div className="mt-1 flex gap-2 flex-wrap">
-													<button
-														onClick={() => { const map = window._mapInstance; if (map) map.flyTo({ center: r.coord, zoom: 16 }); }}
-														className="px-2 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-													>
-														View
-													</button>
-													{!adminMode && r.status !== 'fixed' && !r.pendingFixReview && !r.hiddenGlobally && (
-														<button onClick={() => openFixModal(r.id)} className="px-2 py-1 rounded border border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20">Mark pothole fixed</button>
-													)}
-													{adminMode ? (
-														<button onClick={() => deleteReport(r.id)} className="px-2 py-1 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30">Delete</button>
-													) : (
-														<button onClick={() => requestDeleteReport(r.id)} className="px-2 py-1 rounded border border-yellow-300 dark:border-yellow-700 text-yellow-700 dark:text-yellow-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/30">Request delete</button>
-													)}
-													{/* Severity editing removed for regular user; only admins can change level */}
-												</div>
-											</div>
-										</li>
-									))}
-								</ul>
-								<div className="mt-2 text-[10px] text-gray-500">Reports are saved locally. Clearing browser storage will remove them.</div>
-							</div>
-						)}
-					</div>
+					{/* User pothole reporting card — shared with the Report a Hazard section */}
+					{activeSection === "navigate" && reportCardEl}
 
 					{/* Admin panel */}
 					{adminMode && (
@@ -4521,6 +4590,216 @@ export default function App() {
 
 				</aside>
 			</main>
+
+			{/* Dedicated sections — the map view stays mounted (hidden) underneath */}
+			{activeSection !== "navigate" && (
+				<main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+					{activeSection === "safety" && (
+						<div className="space-y-6">
+							<div>
+								<h2 className="stars-h2">Road Safety</h2>
+								<p className="stars-caption">Overall safety for your routes plus advanced risk estimates. Every figure is computed from live route, incident and hazard-report data — nothing is simulated.</p>
+							</div>
+							<div className="stars-card p-4 sm:p-6">
+								<h3 className="stars-h3 mb-3">Overall safety</h3>
+								{routeAnalyses.length === 0 ? (
+									<p className="text-sm text-gray-600 dark:text-gray-300">No routes analyzed yet. Find a route on the Navigate screen to see safety scores, risk factors and the recommendation here.</p>
+								) : (
+									<>
+										<ul className="space-y-2" role="list">
+											{routeAnalyses.map((a, i) => (
+												<li key={i} className="flex items-center justify-between gap-3 text-sm">
+													<span className="font-medium text-gray-800 dark:text-gray-100 inline-flex items-center gap-2">
+														Route {i + 1}
+														{recommendation?.recommendedIndex === i && <span className="stars-badge-ok">Recommended</span>}
+													</span>
+													<span className="font-bold" style={{ color: a.classification?.color }}>{a.classification?.label} · {a.score}/100</span>
+												</li>
+											))}
+										</ul>
+										{recommendationReasons.length > 0 && (
+											<div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+												<h4 className="text-xs font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">Why this route</h4>
+												<ul className="space-y-1 text-[13px] text-gray-700 dark:text-gray-200 list-disc pl-5">
+													{recommendationReasons.map((reason, ri) => (
+														<li key={`${ri}-${reason}`}>{reason}</li>
+													))}
+												</ul>
+											</div>
+										)}
+									</>
+								)}
+							</div>
+							{sectionChips([
+								...(routes?.length ? [
+									{ key: "predictive", label: "Prediction" },
+									{ key: "segments", label: "Segment risk" },
+									{ key: "waterlogging", label: "Flood risk" },
+									{ key: "night", label: "Night safety" },
+								] : []),
+							])}
+							{sec("predictive") && (
+								<Suspense fallback={null}>
+									<PredictiveSafetyPanel show prediction={predictive} onClose={() => secHide("predictive")} />
+								</Suspense>
+							)}
+							<SegmentRiskStrip show={sec("segments")} segments={routeSegments} onClose={() => secHide("segments")} />
+							<WaterloggingPanel
+								show={sec("waterlogging")}
+								assessment={waterlogging}
+								onClose={() => secHide("waterlogging")}
+								onEnableWeather={() => {
+									const idx = selectedRouteId != null ? Number(selectedRouteId) : 0;
+									if (!routeWeather[idx]) fetchWeatherForRoute(idx);
+								}}
+							/>
+							<NightSafetyPanel show={sec("night")} assessment={nightSafety} onClose={() => secHide("night")} />
+						</div>
+					)}
+
+					{activeSection === "report" && (
+						<div className="space-y-6 max-w-2xl">
+							<div>
+								<h2 className="stars-h2">Report a Road Hazard</h2>
+								<p className="stars-caption">One workflow for every hazard type: pick the type, add evidence, confirm the location, choose severity and submit. The form shows the actual submission status.</p>
+							</div>
+							{reportCardEl}
+						</div>
+					)}
+
+					{activeSection === "trips" && (
+						<div className="space-y-6">
+							<div>
+								<h2 className="stars-h2">Trips</h2>
+								<p className="stars-caption">Trips are recorded automatically when you open a route and complete when you reach the destination.</p>
+							</div>
+							{sectionChips([
+								{ key: "trips", label: "Trip history" },
+								...(safetyAnalytics ? [{ key: "analytics", label: "Analytics" }] : []),
+							])}
+							<TripsPanel show={sec("trips")} trips={tripHistory} stats={tripStats} onClear={clearTrips} onClose={() => secHide("trips")} />
+							{sec("analytics") && (
+								<Suspense fallback={null}>
+									<AnalyticsPanel show analytics={safetyAnalytics} onClose={() => secHide("analytics")} />
+								</Suspense>
+							)}
+						</div>
+					)}
+
+					{activeSection === "intelligence" && (
+						<div className="space-y-6">
+							<div>
+								<h2 className="stars-h2">Road Intelligence</h2>
+								<p className="stars-caption">Road conditions, verified hazards, road health and repair priorities — all derived from the report database.</p>
+							</div>
+							{sectionChips([
+								{ key: "hotspots", label: "Hotspots" },
+								...(roadHealth ? [{ key: "roadHealth", label: "Road health" }] : []),
+								...(changes ? [{ key: "changes", label: "Changes" }] : []),
+								...(rankedRepairs?.length ? [{ key: "priority", label: "Repair priority" }] : []),
+								...(routes?.length && whatIf ? [{ key: "whatIf", label: "Scenario simulation" }] : []),
+								...(adminMode ? [{ key: "municipal", label: "Municipal dashboard" }] : []),
+							])}
+							<HotspotsPanel show={sec("hotspots")} hotspots={hotspots} hasReports={userReports.length > 0} onClose={() => secHide("hotspots")} onFocus={focusHotspot} />
+							<RoadHealthPanel show={sec("roadHealth")} health={roadHealth} onClose={() => secHide("roadHealth")} />
+							<ChangeDetectionPanel show={sec("changes")} changes={changes} onClose={() => secHide("changes")} />
+							<RepairPriorityPanel
+								show={sec("priority")}
+								ranked={rankedRepairs}
+								onClose={() => secHide("priority")}
+								onFocus={(report) => {
+									const map = window._mapInstance;
+									if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
+								}}
+							/>
+							<WhatIfPanel
+								show={sec("whatIf")}
+								result={whatIf}
+								mode={whatIfMode}
+								onModeChange={setWhatIfMode}
+								adjustments={whatIfAdjustments}
+								onAdjustmentsChange={setWhatIfAdjustments}
+								onClose={() => secHide("whatIf")}
+							/>
+							{adminMode ? (
+								<MunicipalDashboard
+									show={sec("municipal")}
+									summary={municipalSummary}
+									reports={municipalReports}
+									filters={municipalFilters}
+									onFiltersChange={setMunicipalFilters}
+									locationChoices={locationOptions(userReports)}
+									totalReports={userReports.length}
+									onClose={() => secHide("municipal")}
+									onFocus={(report) => {
+										const map = window._mapInstance;
+										if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
+									}}
+								/>
+							) : (
+								<div className="stars-card p-4 sm:p-6 text-sm text-gray-600 dark:text-gray-300">
+									Municipal repair, verification and administrative actions are available in Admin mode. Use the <span className="font-semibold">Admin</span> button in the header to sign in — they are never exposed in the ordinary user interface.
+								</div>
+							)}
+						</div>
+					)}
+
+					{activeSection === "settings" && (
+						<div className="space-y-6 max-w-2xl">
+							<div>
+								<h2 className="stars-h2">Settings</h2>
+								<p className="stars-caption">Routing preferences and guidance controls for this device.</p>
+							</div>
+							{sectionChips([{ key: "prefs", label: "Route preferences" }])}
+							<RoutePreferencesPanel
+								show={sec("prefs")}
+								preferences={routePreferences}
+								onChange={setRoutePreferences}
+								onClose={() => secHide("prefs")}
+								onApplyRoutes={() => {
+									if (sourceCoord && destCoord && routes?.length) getRoutes();
+								}}
+							/>
+							<div className="stars-card p-4 sm:p-6">
+								<h3 className="stars-h3 mb-1">Voice guidance</h3>
+								<p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+									{isSpeechSupported() ? "Spoken turn instructions and safety alerts while a route is active." : "Speech synthesis is not supported in this browser."}
+								</p>
+								<div className="flex flex-wrap gap-4 text-sm">
+									<label className="inline-flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-200">
+										<input
+											type="checkbox"
+											checked={voiceSettings.navigation}
+											disabled={!isSpeechSupported()}
+											onChange={(e) => setVoiceSettings((s) => {
+												const next = { ...s, navigation: e.target.checked };
+												if (!next.navigation) cancelSpeech();
+												return next;
+											})}
+											className="w-4 h-4 rounded"
+										/>
+										Navigation announcements
+									</label>
+									<label className="inline-flex items-center gap-2 cursor-pointer text-gray-700 dark:text-gray-200">
+										<input
+											type="checkbox"
+											checked={voiceSettings.safety}
+											disabled={!isSpeechSupported()}
+											onChange={(e) => setVoiceSettings((s) => {
+												const next = { ...s, safety: e.target.checked };
+												if (!next.safety) cancelSpeech();
+												return next;
+											})}
+											className="w-4 h-4 rounded"
+										/>
+										Safety alerts
+									</label>
+								</div>
+							</div>
+						</div>
+					)}
+				</main>
+			)}
 		</div>
 	);
 }
