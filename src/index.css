@@ -215,3 +215,16 @@ html, body, #root {
     @apply text-sm text-gray-600 dark:text-gray-300 leading-relaxed;
   }
 }
+
+/* Respect the OS reduced-motion preference: collapse animations and
+   transitions (spinners still communicate state via other cues). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

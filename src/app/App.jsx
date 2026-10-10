@@ -3015,8 +3015,9 @@ export default function App() {
 
 							{/* Description */}
 							<div>
-								<label className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Description</label>
+								<label htmlFor="report-description" className="text-xs font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wide mb-2 block">Description</label>
 								<textarea
+									id="report-description"
 									value={reportForm.description}
 									onChange={(e) => setReportForm((f) => ({ ...f, description: e.target.value }))}
 									placeholder="Short note (e.g. deep hole near curb)"
@@ -3035,7 +3036,8 @@ export default function App() {
 								<input
 									type="file"
 									accept="image/*"
-									capture="environment"									onChange={(e) => {
+									capture="environment"
+									aria-label="Hazard photo upload"									onChange={(e) => {
 										const file = e.target.files?.[0];
 										if (!file) return;
 										handleImageSelected(file, 'report');
@@ -3217,16 +3219,16 @@ export default function App() {
 			{/* Accessibility: keyboard users can jump past the header */}
 			<a href="#main-content" className="sr-only-focusable fixed top-2 left-2 z-[100] px-3 py-2 rounded-lg bg-white text-indigo-700 shadow-lg border-2 border-indigo-300 font-semibold text-sm">Skip to main content</a>
 			<header className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 shadow-card">
-					<div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 text-gray-900 dark:text-gray-100">
-					<div className="flex items-center gap-3">
+					<div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-3 text-gray-900 dark:text-gray-100">
+					<div className="flex items-center gap-3 min-w-0">
 						<div className="p-1.5 bg-primary-600 text-white rounded-control shadow-card">
 							<MapPin className="w-5 h-5 sm:w-6 sm:h-6" />
 						</div>
-						<div>
+						<div className="min-w-0">
 							<h1 className="text-xl sm:text-2xl font-bold tracking-tight leading-none">STARS</h1>
-							<p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Smart Traffic &amp; Road Safety Assistant</p>
+							<p className="text-[11px] text-gray-500 dark:text-gray-400 font-medium truncate">Smart Traffic &amp; Road Safety Assistant</p>
 						</div>
-						<span className={adminMode ? "stars-badge-ok" : "stars-badge-info"}>{adminMode ? "Admin Mode" : "Navigation"}</span>
+						<span className={`hidden sm:inline-flex ${adminMode ? "stars-badge-ok" : "stars-badge-info"}`}>{adminMode ? "Admin Mode" : "Navigation"}</span>
 					</div>
 					<div className="ml-auto hidden lg:flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400"><Info className="w-3.5 h-3.5" /> Smarter travel, safer roads</div>
 					<button onClick={() => setShowMessages((s) => !s)} aria-label={`Messages from admin${adminMessages.length > 0 ? ` (${adminMessages.length} unread)` : ''}`} className="stars-btn-ghost relative" data-tip="Admin messages">
@@ -3357,8 +3359,7 @@ export default function App() {
 								<Camera className="w-4 h-4" /> Use camera
 							</button>
 							<span className="text-[11px] text-gray-500">or upload from gallery</span>
-						</div>
-						<input type="file" accept="image/*" className="w-full text-xs"						onChange={async (e) => {
+						</div>							<input type="file" accept="image/*" aria-label="Fix proof photo" className="w-full text-xs"						onChange={async (e) => {
 							const file = e.target.files?.[0]; if (!file) return;
 							await handleImageSelected(file, 'fix');
 						}} />
