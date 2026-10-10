@@ -3102,6 +3102,35 @@ export default function App() {
 								})()}
 							</div>
 
+							{/* Review before submitting — step 5 of the reporting workflow */}
+							{(reportForm.type || reportForm.severity || reportForm.coord || reportForm.description || reportForm.photoPreview) && (
+								<div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-2.5" role="group" aria-label="Review your report">
+									<div className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 mb-1">Review your report</div>
+									<ul className="text-[11px] text-gray-600 dark:text-gray-300 space-y-0.5">
+										<li>Type: <span className="font-medium text-gray-800 dark:text-gray-100">{hazardTypeMeta(reportForm.type || DEFAULT_HAZARD_TYPE).label}</span></li>
+										<li>Severity: <span className="font-medium uppercase text-gray-800 dark:text-gray-100">{reportForm.severity}</span></li>
+										<li>Location: {reportForm.coord ? (
+											<span className="font-medium">{reportForm.coord[1].toFixed(5)}, {reportForm.coord[0].toFixed(5)} ({reportForm.coordSource || "unknown source"})</span>
+										) : (
+											<span className="text-amber-700 dark:text-amber-400">not set yet</span>
+										)}</li>
+										<li>Description: {reportForm.description ? (
+											<span className="font-medium">{reportForm.description.length > 60 ? `${reportForm.description.slice(0, 60)}…` : reportForm.description}</span>
+										) : (
+											<span className="text-amber-700 dark:text-amber-400">missing</span>
+										)}</li>
+										<li>Evidence photo: {reportForm.photoPreview ? (
+											<span className="font-medium">attached</span>
+										) : (
+											<span className="text-amber-700 dark:text-amber-400">missing</span>
+										)}</li>
+									</ul>
+									{(!reportForm.coord || !reportForm.description || !reportForm.photoPreview) && (
+										<div className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">Complete the missing items above to submit.</div>
+									)}
+								</div>
+							)}
+
 							{/* Submit */}
 							<div className="pt-1">
 								<button
@@ -3131,7 +3160,7 @@ export default function App() {
 											<div className="flex-1 min-w-0">
 												<div className="font-medium truncate">{r.description || "(no description)"}</div>
 												<div className="text-gray-500 dark:text-gray-400 truncate">
-													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {r.severity} • {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
+													{r.coord[0].toFixed(5)}, {r.coord[1].toFixed(5)} • {hazardTypeMeta(r.type || DEFAULT_HAZARD_TYPE).label} • {r.severity} • {(() => { const st = normalizeStatus(r.status); const sty = STATUS_STYLES[st] || STATUS_STYLES.reported; return <span className="px-1 rounded text-[10px] font-semibold" style={{ backgroundColor: sty.bg, color: sty.text }}>{STATUS_LABELS[st]}</span>; })()}
 													{r.pendingFixReview && <span className="ml-2 px-1 rounded bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300">Fix proof pending</span>}
 												</div>
 												{r.pendingFixReview && r.fixProofPhotoDataUrl && (
