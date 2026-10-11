@@ -74,7 +74,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 	};
 
 	return (
-		<main id="main-content" tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+		<div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
 			{section === "safety" && (
 				<div className="space-y-6">
 					<div>
@@ -296,6 +296,6 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 					</div>
 				</div>
 			)}
-		</main>
+		</div>
 	);
 }

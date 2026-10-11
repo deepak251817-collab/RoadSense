@@ -3286,6 +3286,11 @@ export default function App() {
 				</nav>
 			</header>
 
+			{/* One application <main> — the map view and the section views take turns
+			    inside it; the map container stays mounted (hidden) so Mapbox never
+			    re-initializes when switching sections. */}
+			<main id="main-content" tabIndex={-1}>
+
 			{/* Notice banner */}
 			{notice && (
 				<div role="status" className="max-w-7xl mx-auto px-6 pt-4 animate-in fade-in slide-in-from-top-2 duration-300">
@@ -3471,7 +3476,7 @@ export default function App() {
 				</div>
 			)}
 
-			<main id={activeSection === "navigate" ? "main-content" : undefined} tabIndex={-1} className={`max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8${activeSection === "navigate" ? "" : " hidden"}`}>
+			<div className={`max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8${activeSection === "navigate" ? "" : " hidden"}`}>
 				<section className="lg:col-span-2 space-y-6">
 					{/* Controls */}
 					<div ref={reportCardRef} className="stars-card p-4 sm:p-6">
@@ -4514,7 +4519,7 @@ export default function App() {
 
 					{/* Admin panel */}
 					{adminMode && (
-						<div className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
+						<div className="stars-card p-4">
 							<h2 className="text-sm font-medium mb-2 flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Admin</h2>
 							<div className="text-[11px] text-gray-600 dark:text-gray-300 mb-2">Moderate reports and manage data (local-only). The municipal overview lives in <span className="font-semibold">Road Intelligence → Municipal dashboard</span> while Admin mode is on.</div>
 							{/* Dashboard summary */}
@@ -4652,12 +4657,13 @@ export default function App() {
 					)}
 
 				</aside>
-			</main>
+			</div>
 
 			{/* Dedicated sections — the map view stays mounted (hidden) underneath */}
 			{activeSection !== "navigate" && (
 				<SectionViews section={activeSection} hidden={sectionHidden} setHidden={setSectionHidden} {...sectionCtx} />
 			)}
+			</main>
 		</div>
 	);
 }
