@@ -86,6 +86,7 @@ import EmergencyPanel from "../features/emergency/EmergencyPanel";
 import { EMERGENCY_LABEL, buildEmergencyContext } from "../features/emergency/emergencyMode";
 import MapLayersPopover from "../features/map/MapLayersPopover";
 import useHazardAlerts from "../hooks/useHazardAlerts";
+import useTheme from "../hooks/useTheme";
 import SectionViews from "../app/sections/SectionViews";
 import {
   isSpeechSupported,
@@ -197,6 +198,8 @@ export default function App() {
 	const [adminPinOpen, setAdminPinOpen] = useState(false);
 	const [adminPinValue, setAdminPinValue] = useState('');
 	const [adminPinError, setAdminPinError] = useState('');
+	// Global light/dark theme — persisted; index.html applies it before first paint
+	const { isDark, toggleTheme } = useTheme();
 	// Admin-to-user messages (persisted)
 	const [adminMessages, setAdminMessages] = useState([]); // { id, reportId, message, createdAt }
 	const [showMessages, setShowMessages] = useState(false);
@@ -3259,6 +3262,15 @@ export default function App() {
 					<button onClick={() => setShowMessages((s) => !s)} aria-label={`Messages from admin${adminMessages.length > 0 ? ` (${adminMessages.length} unread)` : ''}`} className="stars-btn-ghost relative" data-tip="Admin messages">
 						<Bell className="w-4 h-4" />
 						{adminMessages.length > 0 && <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-semibold animate-pulse">{adminMessages.length}</span>}
+					</button>
+					<button
+						onClick={toggleTheme}
+						aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+						aria-pressed={isDark}
+						data-tip={isDark ? "Switch to light mode" : "Switch to dark mode"}
+						className="stars-btn-ghost"
+					>
+						{isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
 					</button>
 					<button
 						onClick={() => {
