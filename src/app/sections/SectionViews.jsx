@@ -10,6 +10,7 @@ import RepairPriorityPanel from "../../features/admin/RepairPriorityPanel";
 import WhatIfPanel from "../../features/routing/WhatIfPanel";
 import MunicipalDashboard from "../../features/admin/MunicipalDashboard";
 import RoutePreferencesPanel from "../../features/routing/RoutePreferencesPanel";
+import { routeLabel } from "../../features/routing/routeIdentity";
 import { FACTOR_LABELS } from "../../features/safety/safetyScore";
 
 // Lazy: keeps the chart library and prediction UI out of the initial bundle
@@ -91,7 +92,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 													<li key={i}>
 														<div className="flex items-center justify-between gap-3 text-sm">
 															<span className="font-medium text-gray-800 dark:text-gray-100 inline-flex items-center gap-2">
-																Route {i + 1}
+																{routeLabel(i)}
 																{recommendation?.recommendedIndex === i && <span className="stars-badge-ok">Recommended</span>}
 															</span>
 															<span className="font-bold" style={{ color: a.classification?.color }}>{a.classification?.label} · {a.score}/100</span>

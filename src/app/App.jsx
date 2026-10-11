@@ -44,6 +44,7 @@ import {
   STATUS_ORDER,
 } from "../features/admin/hazardLifecycle";
 import { analyzeRoutes, collectRouteReports } from "../features/routing/routeAnalysis";
+import { assignRouteIds, routeLabel, routeKeyAt } from "../features/routing/routeIdentity";
 import { recommendRoute, buildRecommendationReasons } from "../features/routing/recommendation";
 import { buildRouteIncidents, fetchExternalIncidents, INCIDENT_TYPE_LABELS } from "../services/incidentService";
 import { fetchJsonCached, fetchWithTimeout } from "../services/httpClient";
@@ -1462,6 +1463,7 @@ export default function App() {
 			setPotholesByRoute({});
 			setOpenPotholeId(null);
 			setCongestionSegments([]);
+			assignRouteIds(routesData); // stable ids → single source of truth for keys/labels
 			setRoutes(routesData);
 			// Choose the shortest-duration route as primary
 			let primaryId = 0;
@@ -3883,7 +3885,7 @@ export default function App() {
 						{/* Map overlay: selected route chip + quick actions */}
 						{selectedRouteId != null && (
 							<div className="absolute top-4 left-4 flex items-center gap-2 animate-in slide-in-from-left duration-300">
-								<div className="px-4 py-2 rounded-xl text-sm font-bold bg-primary-600 text-white shadow-card">Route {Number(selectedRouteId) + 1}</div>
+								<div className="px-4 py-2 rounded-xl text-sm font-bold bg-primary-600 text-white shadow-card">{routeLabel(selectedRouteId)}</div>
 							</div>
 						)}
 						<div className="absolute top-4 right-4 flex items-center gap-2">
@@ -4015,12 +4017,12 @@ export default function App() {
 									const selected = String(idx) === String(selectedRouteId);
 									return (
 										<button
-											key={`map-route-chip-${idx}`}
+											key={routeKeyAt(routes, idx)}
 											onClick={() => { const map = window._mapInstance; if (map) selectRouteById(map, routes, idx); }}
 											className={`text-left px-4 py-2.5 rounded-card text-xs font-semibold backdrop-blur-md shadow-pop border-2 transition-all duration-150 ${selected ? 'bg-primary-600 border-white/40 ring-2 ring-white/50 text-white' : 'bg-white/90 dark:bg-gray-900/80 border-gray-200 dark:border-gray-700 hover:bg-white hover:shadow-xl text-gray-900 dark:text-gray-100'}`}
 										>
 											<div className="flex items-center justify-between gap-3">
-												<span className="font-bold">Route {idx + 1}</span>
+												<span className="font-bold">{routeLabel(idx)}</span>
 												<span className={`text-[11px] font-medium whitespace-nowrap ${selected ? 'text-white/90' : 'text-gray-600 dark:text-gray-300'}`}>{minutes} min · {km} km</span>
 											</div>
 										</button>
@@ -4048,7 +4050,13 @@ export default function App() {
 				<aside className="space-y-6">
 					{routes.length > 0 && (
 						<div className="stars-card p-4 sm:p-5">
-							<h2 className="stars-h2 mb-4 sticky top-4 z-10 bg-white/90 dark:bg-gray-900/90 py-1 rounded-control">Route Options</h2>
+							<div className="mb-4 sticky top-4 z-10 bg-white/90 dark:bg-gray-900/90 py-1 rounded-control">
+								<h2 className="stars-h2">Route Options</h2>
+								{/* Route count: derived from the routes array, shown exactly once */}
+								<p className="stars-caption" data-testid="route-count">
+									{routes.length} route{routes.length === 1 ? "" : "s"} available
+								</p>
+							</div>
 
 							{/* Multi-route comparison: actual per-route analysis results */}
 							{routeAnalyses.length > 1 && (
@@ -4163,12 +4171,12 @@ export default function App() {
 									// Count of user-uploaded potholes near this route (within ~120m)
 									const potCount = userPotholeCounts[idx] || 0;
 									return (
-										<li key={idx} className={`w-full text-sm rounded-xl px-4 py-3 border-2 relative cursor-pointer transition-all duration-200 hover:shadow-lg ${selected ? "border-primary-400 bg-primary-50/70 dark:bg-primary-900/25 shadow-md" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"}`} style={{ minHeight: '88px' }}>
+										<li key={routeKeyAt(routes, idx)} className={`w-full text-sm rounded-xl px-4 py-3 border-2 relative cursor-pointer transition-all duration-200 hover:shadow-lg ${selected ? "border-primary-400 bg-primary-50/70 dark:bg-primary-900/25 shadow-md" : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"}`} style={{ minHeight: '88px' }}>
 											<div className={`absolute left-0 top-0 bottom-0 w-1.5 rounded-l-xl ${selected ? "bg-primary-500" : "bg-transparent"}`} />
 											<div className="flex flex-wrap items-center justify-between gap-2">
 												<div className="min-w-0">
 													<div className="font-semibold flex items-center gap-2">
-														<span className="text-gray-900 dark:text-gray-100">Route {idx + 1}</span>
+														<span className="text-gray-900 dark:text-gray-100">{routeLabel(idx)}</span>
 													{recommendation?.recommendedIndex === idx && (
 														<span className="stars-badge-ok" title="Recommended safer route">RECOMMENDED</span>
 													)}
@@ -4484,8 +4492,7 @@ export default function App() {
 						return (
 							<div className="stars-card p-4 sm:p-5">
 								<h2 className="stars-h2 mb-1">Directions</h2>
-								<p className="stars-caption mb-3">
-									Route {Number(selectedRouteId) + 1} · {selSteps.length} steps · voice {voiceSettings.navigation && isSpeechSupported() ? "on" : "off"}
+								<p className="stars-caption mb-3">														{routeLabel(selectedRouteId)} · {selSteps.length} steps · voice {voiceSettings.navigation && isSpeechSupported() ? "on" : "off"}
 								</p>
 								<ol className="space-y-1.5 max-h-64 overflow-auto pr-1" aria-label={`Directions for route ${Number(selectedRouteId) + 1}`}>
 									{selSteps.map((s, i) => {
