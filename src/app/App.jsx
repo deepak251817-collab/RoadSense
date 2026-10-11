@@ -180,6 +180,9 @@ export default function App() {
 	// User-reported potholes (persistent in localStorage)
 	const [userReports, setUserReports] = useState([]); // [{id, coord, severity, description, photoDataUrl, routeIdx, createdAt, status, reviewedAt}]
 	const [reportForm, setReportForm] = useState({ coord: null, coordSource: null, type: DEFAULT_HAZARD_TYPE, severity: "moderate", description: "", photoPreview: null, captureAt: null, photoSource: null, detection: null });
+	// Contextual reporting: the form lives in a dialog on Navigate (and in the
+	// Report a Hazard section) instead of being permanently visible.
+	const [reportDialogOpen, setReportDialogOpen] = useState(false);
 	const [routeWeather, setRouteWeather] = useState({}); // { [routeId]: { loading, error, points: [ { label, coord, data } ] } }
 	const [ocrMessage, setOcrMessage] = useState(""); // status for overlay OCR fallback
 	const [ocrBusy, setOcrBusy] = useState(false);
@@ -2985,6 +2988,15 @@ export default function App() {
 	];
 
 	// Report-a-hazard card, shared by the Navigate view and the Report section
+	// Warn before discarding entered information (untouched forms close silently).
+	const isReportFormDirty = () => {
+		const f = reportForm;
+		return Boolean(f.coord || f.photoPreview || f.description || f.detection || f.captureAt || (f.type && f.type !== DEFAULT_HAZARD_TYPE) || (f.severity && f.severity !== "moderate"));
+	};
+	const attemptCloseReportDialog = () => {
+		if (isReportFormDirty() && !window.confirm("Discard this report? Your entered details will be lost.")) return;
+		setReportDialogOpen(false);
+	};
 	const reportCardEl = (
 						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
 						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h2>
@@ -3147,7 +3159,7 @@ export default function App() {
 							{/* Submit */}
 							<div className="pt-1">
 								<button
-									onClick={submitPotholeReport}
+									onClick={() => { submitPotholeReport(); setReportDialogOpen(false); }}
 									disabled={!reportForm.photoPreview || !reportForm.description || !reportForm.coord}
 									className="px-4 py-2 rounded-md text-sm font-medium bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-700 transition shadow-sm"
 								>
@@ -3309,7 +3321,27 @@ export default function App() {
 		<HazardAlertStack alerts={hazardAlerts.alerts} onDismiss={hazardAlerts.dismiss} />
 
 			{/* Global modals */}
-			{/* Admin PIN dialog (in-app; native prompt/alert are unreliable) */}
+				{/* Report Hazard dialog — the existing reporting workflow in a modal
+			    (full-screen-friendly on phones); the map stays visible behind it. */}
+			{activeSection === "navigate" && reportDialogOpen && (
+				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Report a road hazard">
+					<div className="stars-dialog-backdrop" onClick={attemptCloseReportDialog} />
+					<div className="stars-dialog max-w-2xl max-h-[85vh] h-[80vh] sm:h-auto overflow-y-auto">
+						<button
+							type="button"
+							onClick={attemptCloseReportDialog}
+							aria-label="Close report form"
+							data-tip="Close"
+							className="absolute top-3 right-3 p-1.5 rounded-control text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 z-10"
+						>
+							<X className="w-4 h-4" />
+						</button>
+						{reportCardEl}
+					</div>
+				</div>
+			)}
+
+			{/* Admin PIN dialog (in-app; native prompt/alert is unreliable) */}
 			{adminPinOpen && (
 				<div className="stars-dialog-overlay" role="dialog" aria-modal="true" aria-label="Admin sign in">
 					<div className="stars-dialog-backdrop" onClick={() => setAdminPinOpen(false)} />
@@ -3995,14 +4027,9 @@ export default function App() {
 								<CloudSun className="w-5 h-5" aria-hidden="true" />
 							</button>
 							<button
-								data-tip="Report a hazard"
+								data-tip="Report Hazard"
 								aria-label="Report a road hazard"
-								onClick={() => {
-									try {
-										reportCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-										setTimeout(() => openCameraModal('report'), 400);
-									} catch {}
-								}}
+								onClick={() => setReportDialogOpen(true)}
 								className="p-3.5 rounded-full bg-primary-600 border border-primary-700 text-white shadow-pop hover:bg-primary-700 transition-colors duration-150"
 							>
 								<Camera className="w-6 h-6" aria-hidden="true" />
@@ -4521,8 +4548,8 @@ export default function App() {
 							</div>
 						);
 					})()}
-					{/* User pothole reporting card — shared with the Report a Hazard section */}
-					{activeSection === "navigate" && reportCardEl}
+					{/* Hazard reporting is contextual: opened from the Report Hazard action
+					    (and the Report a Hazard section) — not permanently on Navigate. */}
 
 					{/* Admin panel */}
 					{adminMode && (
