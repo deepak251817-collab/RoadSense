@@ -4,7 +4,7 @@ import moderateIcon from "../assets/potholes/moderate.svg";
 import highIcon from "../assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, Search, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
+import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -3978,17 +3978,6 @@ export default function App() {
 						{/* Floating quick actions (bottom-right) */}
 						<div className="absolute bottom-4 right-4 flex flex-col gap-3">
 							<button
-								data-tip="Search places"
-								aria-label="Search places"
-								onClick={() => {
-									try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
-									setTimeout(() => { try { sourceInputRef.current?.focus(); } catch {} }, 250);
-								}}
-								className="p-3 rounded-full bg-white/95 dark:bg-gray-900/95 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 shadow-pop hover:bg-white dark:hover:bg-gray-800 transition-colors duration-150"
-							>
-								<Search className="w-5 h-5" aria-hidden="true" />
-							</button>
-							<button
 								data-tip="My location"
 								aria-label="Center map on my location"
 								onClick={handleUseMyLocation}
@@ -3996,36 +3985,8 @@ export default function App() {
 							>
 								<LocateFixed className="w-5 h-5" aria-hidden="true" />
 							</button>
-							<button
-								data-tip="Traffic on route"
-								aria-label="Show traffic on route"
-								aria-pressed={openTrafficId != null}
-								onClick={() => {
-									const idx = selectedRouteId != null ? Number(selectedRouteId) : (routes?.length ? 0 : null);
-									if (idx == null) { setNotice({ type: 'info', message: 'Select a route to view traffic.' }); setTimeout(() => setNotice(null), 2500); return; }
-									const newOpen = String(openTrafficId) === String(idx) ? null : String(idx);
-									setOpenTrafficId(newOpen);
-									if (newOpen && !trafficByRoute[idx]) fetchTrafficForRoute(idx);
-								}}
-								className={`p-3 rounded-full border shadow-pop transition-colors duration-150 ${openTrafficId != null ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700' : 'bg-white/95 dark:bg-gray-900/95 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800'}`}
-							>
-								<Gauge className="w-5 h-5" aria-hidden="true" />
-							</button>
-							<button
-								data-tip="Weather on route"
-								aria-label="Show weather on route"
-								aria-pressed={openWeatherId != null}
-								onClick={() => {
-									const idx = selectedRouteId != null ? Number(selectedRouteId) : (routes?.length ? 0 : null);
-									if (idx == null) { setNotice({ type: 'info', message: 'Select a route to view weather.' }); setTimeout(() => setNotice(null), 2500); return; }
-									const newOpen = String(openWeatherId) === String(idx) ? null : String(idx);
-									setOpenWeatherId(newOpen);
-									if (newOpen) { if (!routeWeather[idx]) fetchWeatherForRoute(idx); else renderWeatherMarkersFor(idx); } else { removeWeatherMarkersFor(idx); }
-								}}
-								className={`p-3 rounded-full border shadow-pop transition-colors duration-150 ${openWeatherId != null ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700' : 'bg-white/95 dark:bg-gray-900/95 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800'}`}
-							>
-								<CloudSun className="w-5 h-5" aria-hidden="true" />
-							</button>
+							{/* Report Hazard — the single floating action (traffic/weather toggles
+							    live in the Layers popover; search lives in the plan panel). */}
 							<button
 								data-tip="Report Hazard"
 								aria-label="Report a road hazard"
