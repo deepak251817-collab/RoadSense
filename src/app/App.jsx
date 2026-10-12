@@ -4,7 +4,7 @@ import moderateIcon from "../assets/potholes/moderate.svg";
 import highIcon from "../assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, List, X, Settings, Maximize2, Minimize2, AlertTriangle, Volume2, VolumeX, CloudRain, Sun, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
+import { MapPin, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, List, X, Maximize2, Minimize2, AlertTriangle, Volume2, VolumeX, CloudRain, Sun, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -110,13 +110,19 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 const CLUSTER_THRESHOLD_METERS = 50;
 
 /** Top-level application sections (target information architecture). */
+// Application pages (spec: Navigate / Safety / Hazards / Environment /
+// Analytics / Tools). Road Intelligence is retained as a justified extra
+// page: road health, hotspots, change detection, repair priority and the
+// admin municipal dashboard are core STARS features. Keys double as the
+// URL hash segments (#/navigate, #/safety, …).
 const STARS_SECTIONS = [
 	{ key: "navigate", label: "Navigate", icon: Compass },
-	{ key: "safety", label: "Road Safety", icon: ShieldCheck },
-	{ key: "report", label: "Report a Hazard", icon: AlertTriangle },
-	{ key: "trips", label: "Trips", icon: List },
+	{ key: "safety", label: "Safety", icon: ShieldCheck },
+	{ key: "report", label: "Hazards", icon: AlertTriangle },
+	{ key: "environment", label: "Environment", icon: CloudRain },
+	{ key: "trips", label: "Analytics", icon: BarChart3 },
 	{ key: "intelligence", label: "Road Intelligence", icon: Activity },
-	{ key: "settings", label: "Settings", icon: Settings },
+	{ key: "settings", label: "Tools", icon: Wrench },
 ];
 
 export default function App() {
@@ -232,10 +238,25 @@ export default function App() {
 	// Hazard hotspot panel (ranked areas of concentrated active hazards)
 	const [showHotspots, setShowHotspots] = useState(false);
 	const [showTrips, setShowTrips] = useState(false);
-	// ---- Top-level section navigation (Navigate / Road Safety / Report a Hazard / Trips / Road Intelligence / Settings) ----
-	const [activeSection, setActiveSection] = useState("navigate");
+	// ---- Top-level page navigation (Navigate / Safety / Hazards / Environment / Analytics / Road Intelligence / Tools) ----
+	// Each page has a distinct URL hash (#/navigate, #/safety, …). Switching
+	// pages never triggers route calculation and never clears routes — the
+	// map stays mounted underneath (spec: page routing ≠ route calculation).
+	const [activeSection, setActiveSection] = useState(() => {
+		const h = (typeof window !== "undefined" ? window.location.hash : "").replace(/^#\/?/, "");
+		return STARS_SECTIONS.some((s) => s.key === h) ? h : "navigate";
+	});
 	// Panels the user folded away *within* a section (independent of the map dock toggles)
 	const [sectionHidden, setSectionHidden] = useState({});
+	// Back/forward buttons move between application pages
+	useEffect(() => {
+		const onHash = () => {
+			const h = window.location.hash.replace(/^#\/?/, "");
+			if (STARS_SECTIONS.some((s) => s.key === h)) setActiveSection(h);
+		};
+		window.addEventListener("hashchange", onHash);
+		return () => window.removeEventListener("hashchange", onHash);
+	}, []);
 	// The map stays mounted while a section is open; re-measure it when Navigate returns
 	useEffect(() => {
 		if (activeSection !== "navigate") return;
@@ -3240,6 +3261,15 @@ export default function App() {
 		setMunicipalFilters, locationOptions,
 		routePreferences, setRoutePreferences, sourceCoord, destCoord, getRoutes,
 		voiceSettings, setVoiceSettings, isSpeechSupported, cancelSpeech,
+		trafficByRoute,
+		// Data-source availability for the Environment page — honest status,
+		// never claiming a source that is not configured on this device.
+		sources: {
+			mapbox: tokenPresent,
+			weather: Boolean(import.meta.env.VITE_OPENWEATHER_KEY),
+			incidents: Boolean(import.meta.env.VITE_INCIDENTS_URL),
+			backend: Boolean(import.meta.env.VITE_API_BASE_URL),
+		},
 	};
 	return (
 		<div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100">
@@ -3298,7 +3328,7 @@ export default function App() {
 								<button
 									key={s.key}
 									type="button"
-									onClick={() => { setActiveSection(s.key); setSectionHidden({}); }}
+									onClick={() => { setActiveSection(s.key); setSectionHidden({}); window.location.hash = `#/${s.key}`; }}
 									aria-current={active ? "page" : undefined}
 									className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${active ? "border-primary-600 text-primary-700 dark:text-primary-300" : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600"}`}
 								>

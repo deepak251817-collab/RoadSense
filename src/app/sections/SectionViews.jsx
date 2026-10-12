@@ -18,13 +18,14 @@ const AnalyticsPanel = React.lazy(() => import("../../features/community/Analyti
 const PredictiveSafetyPanel = React.lazy(() => import("../../features/safety/PredictiveSafetyPanel"));
 
 /**
- * Dedicated section views: Road Safety, Report a Hazard, Trips,
- * Road Intelligence and Settings.
+ * Dedicated section views: Safety, Hazards, Environment, Analytics,
+ * Road Intelligence and Tools.
  *
  * Rendered by App while `section !== "navigate"`; the map view stays
  * mounted (hidden) underneath so Mapbox never re-initializes. All data
  * arrives through props from the App composition root — this module
- * owns presentation only.
+ * owns presentation only. Each section renders its own content; route
+ * results live exclusively on the Navigate page.
  *
  * @param {Object} props
  * @param {string} props.section active section key
@@ -44,6 +45,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 		setMunicipalFilters, locationOptions,
 		routePreferences, setRoutePreferences, sourceCoord, destCoord, getRoutes,
 		voiceSettings, setVoiceSettings, isSpeechSupported, cancelSpeech,
+		trafficByRoute, sources,
 	} = ctx;
 
 	// Panels are shown by default inside a section; the chips fold them away
@@ -79,7 +81,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 			{section === "safety" && (
 				<div className="space-y-6">
 					<div>
-						<h2 className="stars-h2">Road Safety</h2>
+						<h2 className="stars-h2">Safety</h2>
 						<p className="stars-caption">Overall safety for your routes plus advanced risk estimates. Every figure is computed from live route, incident and hazard-report data — nothing is simulated.</p>
 					</div>							<div className="stars-card p-4 sm:p-6">
 								<h3 className="stars-h3 mb-1">Overall safety</h3>
@@ -160,18 +162,124 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 			{section === "report" && (
 				<div className="space-y-6 max-w-2xl">
 					<div>
-						<h2 className="stars-h2">Report a Road Hazard</h2>
-						<p className="stars-caption">One workflow for every hazard type: pick the type, add evidence, confirm the location, choose severity and submit. The form shows the actual submission status.</p>
+						<h2 className="stars-h2">Hazards</h2>
+						<p className="stars-caption">Every reported hazard — type, severity, location and review status — plus one workflow to report a new one: pick the type, add evidence, confirm the location, choose severity and submit.</p>
+					</div>						{reportCardEl}
 					</div>
-					{reportCardEl}
+				)}
+
+			{section === "environment" && (
+				<div className="space-y-6 max-w-3xl">
+					<div>
+						<h2 className="stars-h2">Environment</h2>
+						<p className="stars-caption">Traffic and weather along your active route, plus which data sources are connected on this device. When a source is not wired, the value shows as unavailable — never estimated.</p>
+					</div>
+					{sectionChips([
+						{ key: "traffic", label: "Traffic" },
+						{ key: "weather", label: "Weather" },
+						{ key: "sources", label: "Data sources" },
+					])}
+
+					{sec("traffic") && (
+						<section className="stars-card p-4 sm:p-6" aria-label="Traffic conditions">
+							<h3 className="stars-h3 mb-3">Traffic</h3>
+							{!routes?.length ? (
+								<p className="stars-empty">No route calculated yet. Find a route on the Navigate page — per-route traffic measurements then appear here.</p>
+							) : (
+								<ul className="space-y-2" role="list">
+									{routes.map((_, idx) => {
+										const t = trafficByRoute?.[idx];
+										return (
+											<li key={idx} className="flex flex-wrap items-center gap-2 text-sm">
+												<span className="font-semibold text-gray-800 dark:text-gray-100">{routeLabel(idx)}</span>
+												{t?.loading && <span className="stars-badge stars-badge-neutral">Measuring…</span>}
+												{!t?.loading && t?.error && <span className="stars-badge stars-badge-warn">Unavailable</span>}
+												{!t?.loading && !t?.error && t?.points && (
+													<span className="stars-badge stars-badge-ok">
+														{Math.round(t.liveMinutes)} min now (free-flow {Math.round(t.freeMinutes)} min){t.updatedAt ? ` · ${new Date(t.updatedAt).toLocaleTimeString()}` : ""}
+													</span>
+												)}
+												{!t?.loading && !t?.error && !t?.points && (
+													<span className="stars-badge stars-badge-neutral">Not fetched yet — open Traffic on the route card</span>
+												)}
+											</li>
+										);
+									})}
+								</ul>
+							)}
+						</section>
+					)}
+
+					{sec("weather") && (
+						<section className="stars-card p-4 sm:p-6" aria-label="Weather conditions">
+							<h3 className="stars-h3 mb-3">Weather</h3>
+							{!routes?.length ? (
+								<p className="stars-empty">No route calculated yet. Find a route on the Navigate page, then fetch weather from its route card.</p>
+							) : !sources?.weather ? (
+								<p className="stars-empty">No weather source is configured on this device, so STARS has no weather to show. Add a OpenWeather key (VITE_OPENWEATHER_KEY) to enable it — the app never invents weather values.</p>
+							) : (() => {
+								const anyFetched = routes.some((_, idx) => routeWeather?.[idx]?.points?.length);
+								if (!anyFetched) {
+									return <p className="stars-empty">Weather not fetched yet — open the Weather toggle on a route card to measure conditions along it.</p>;
+								}
+								return (
+									<div className="space-y-3">
+										{routes.map((_, idx) => {
+											const w = routeWeather?.[idx];
+											if (!w?.points?.length) return null;
+											return (
+												<div key={idx}>
+													<div className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">{routeLabel(idx)}</div>
+													{w.error ? (
+														<span className="stars-badge stars-badge-warn">Fetch failed — {String(w.error).slice(0, 80)}</span>
+													) : (
+														<ul className="flex flex-wrap gap-2" role="list">
+															{w.points.map((p, pi) => (
+																<li key={pi} className="text-xs px-2 py-1 rounded-control border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200">
+																	<span className="font-medium">{p.label || `Point ${pi + 1}`}</span>
+																	{p.data?.weather?.[0]?.description ? ` · ${p.data.weather[0].description}` : ""}
+																	{Number.isFinite(p.data?.main?.temp) ? ` · ${Math.round(p.data.main.temp)}°C` : ""}
+																</li>
+															))}
+														</ul>
+													)}
+												</div>
+											);
+										})}
+									</div>
+								);
+							})()}
+						</section>
+					)}
+
+					{sec("sources") && (
+						<section className="stars-card p-4 sm:p-6" aria-label="Data sources">
+							<h3 className="stars-h3 mb-3">Data sources</h3>
+							<ul className="space-y-2 text-sm" role="list">
+								{[
+									{ name: "Mapbox (map, directions, geocoding)", on: !!sources?.mapbox, note: sources?.mapbox ? "Token configured" : "VITE_MAPBOX_TOKEN missing — routing unavailable" },
+									{ name: "OpenWeather (route weather)", on: !!sources?.weather, note: sources?.weather ? "API key configured" : "Not configured — weather stays unavailable" },
+									{ name: "Incident feed (road incidents)", on: !!sources?.incidents, note: sources?.incidents ? "Feed URL configured" : "Not configured — incident counts show —" },
+									{ name: "Optional report backend", on: !!sources?.backend, note: sources?.backend ? "VITE_API_BASE_URL configured" : "Not configured — reports persist in this browser" },
+								].map((s) => (
+									<li key={s.name} className="flex flex-wrap items-center gap-2">
+										<span className={`stars-badge ${s.on ? "stars-badge-ok" : "stars-badge-neutral"}`}>{s.on ? "Connected" : "Not connected"}</span>
+										<span className="font-medium text-gray-800 dark:text-gray-100">{s.name}</span>
+										<span className="stars-caption">{s.note}</span>
+									</li>
+								))}
+							</ul>
+							<p className="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Hazard reports are stored on this device. Missing sources are reported as missing — STARS never fabricates traffic, weather, incident or safety values.</p>
+						</section>
+					)}
 				</div>
 			)}
 
 			{section === "trips" && (
 				<div className="space-y-6">
 					<div>
-						<h2 className="stars-h2">Trips</h2>
-						<p className="stars-caption">Trips are recorded automatically when you open a route and complete when you reach the destination.</p>
+						<h2 className="stars-h2">Analytics</h2>
+						<p className="stars-caption">Trip history and safety analytics computed from your recorded trips. Every figure derives from real stored data — nothing is simulated.</p>
 					</div>
 					{sectionChips([
 						{ key: "trips", label: "Trip history" },
@@ -246,7 +354,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 			{section === "settings" && (
 				<div className="space-y-6 max-w-2xl">
 					<div>
-						<h2 className="stars-h2">Settings</h2>
+						<h2 className="stars-h2">Tools</h2>
 						<p className="stars-caption">Routing preferences and guidance controls for this device.</p>
 					</div>
 					{sectionChips([{ key: "prefs", label: "Route preferences" }])}
