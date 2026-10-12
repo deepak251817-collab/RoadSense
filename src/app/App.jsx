@@ -153,10 +153,15 @@ export default function App() {
 	const [openDetailsId, setOpenDetailsId] = useState(null);
 	const [openWeatherId, setOpenWeatherId] = useState(null);
 	const [openTrafficId, setOpenTrafficId] = useState(null);
-	// Recommendation panel: null until the user accepts or keeps a route
-	const [recChoice, setRecChoice] = useState(null); // null | 'use' | 'keep'
+	// Recommendation panel: removed the accept/keep buttons — each route card
+	// already provides the Select action, so the summary stays informational.
 	// Route-results sidebar can be folded so the map keeps the stage (map-first layout)
 	const [routePanelOpen, setRoutePanelOpen] = useState(true);
+	// Detailed comparison table is an explicitly opened view, never a second
+	// simultaneously visible duplicate of the route cards
+	const [compareOpen, setCompareOpen] = useState(false);
+	// Turn-by-turn directions are collapsed by default (compact heading + toggle)
+	const [directionsOpen, setDirectionsOpen] = useState(false);
 	// Incident intelligence state
 	const [externalIncidents, setExternalIncidents] = useState({ available: false, items: [], error: null });
 	const [openIncidentId, setOpenIncidentId] = useState(null);
@@ -1500,9 +1505,8 @@ export default function App() {
 			try {
 				let bestDur = Number.MAX_SAFE_INTEGER;
 				routesData.forEach((r, i) => { const d = r?.duration ?? Number.MAX_SAFE_INTEGER; if (d < bestDur) { bestDur = d; primaryId = i; } });
-			} catch { }							setSelectedRouteId(String(primaryId));
-						setRecChoice(null); // fresh routes → fresh recommendation offer
-						setRoutePanelOpen(true); // fresh results → the sidebar is open again
+			} catch { }				setSelectedRouteId(String(primaryId));
+			setRoutePanelOpen(true); // fresh results → the sidebar is open again
 			drawRoutesOnMap(map, routesData, primaryId);
 			// re-render user-reported markers after route change
 			renderUserPotholeMarkers();
@@ -4111,9 +4115,21 @@ export default function App() {
 							{routePanelOpen && (
 							<div id="route-results-body">
 
-							{/* Multi-route comparison: actual per-route analysis results */}
+							{/* Detailed comparison: an explicitly opened view, not a second
+							    simultaneously visible duplicate of the route cards */}
 							{routeAnalyses.length > 1 && (
-								<div className="mb-4 overflow-x-auto" role="region" aria-label="Route comparison">
+								<div className="mb-4">
+									<button
+										type="button"
+										aria-expanded={compareOpen}
+										aria-controls="route-comparison-table"
+										onClick={() => setCompareOpen((v) => !v)}
+										className="px-3 py-1.5 rounded-control text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
+									>
+										{compareOpen ? "Hide comparison" : "Compare routes"}
+									</button>
+									{compareOpen && (
+										<div id="route-comparison-table" className="mt-3 overflow-x-auto" role="region" aria-label="Route comparison">
 									<table className="w-full text-[11px] border-collapse whitespace-nowrap">
 										<caption className="sr-only">Comparison of travel time, distance, traffic, hazards, weather, incidents and safety across routes</caption>
 										<thead>
@@ -4149,67 +4165,62 @@ export default function App() {
 										</tbody>
 									</table>
 									<div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">* estimated from route speeds · weather/incidents show — when no source is wired</div>
+										</div>
+									)}
 								</div>
 							)}
 
-							{routes.length > 1 && recommendation && recChoice === null && routeAnalyses[recommendation.recommendedIndex] && (
-								<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Recommended safer route">
-									<div className="flex items-center justify-between gap-2">
-										<span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Recommended safer route</span>
-										{/* Score shown once on the route card itself — not repeated here */}
-										<span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 whitespace-nowrap">
-											{routeAnalyses[recommendation.recommendedIndex].classification?.label}
-										</span>
-									</div>
-									<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
-										<span className="font-bold">{routeAnalyses[recommendation.recommendedIndex].label}</span>
-										<span className="text-[11px] px-2 py-0.5 rounded-full bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">Travel time: {routeAnalyses[recommendation.recommendedIndex].durationMinutes} min</span>
-										<span className="text-[11px] px-2 py-0.5 rounded-full bg-white/80 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700">{routeAnalyses[recommendation.recommendedIndex].distanceKm.toFixed(1)} km</span>
-									</div>
-									<div className="mt-1 text-[11px] text-gray-600 dark:text-gray-300">
-										{recommendation.isFastest
-											? "Also the fastest available route."
-											: `${recommendation.timeDeltaMinutes > 0 ? `+${recommendation.timeDeltaMinutes} min` : "Same time"} vs fastest (+${recommendation.timeDeltaPct}%) · +${recommendation.safetyAdvantage} safety points`}
-										{routeAnalyses[recommendation.recommendedIndex].confidence && (
-											<span
-												className="ml-1 font-semibold"
-												style={{ color: routeAnalyses[recommendation.recommendedIndex].confidence.color }}
-												title={routeAnalyses[recommendation.recommendedIndex].confidence.reasons.join(" · ")}
-											>
-												 · Confidence: {routeAnalyses[recommendation.recommendedIndex].confidence.label} ({routeAnalyses[recommendation.recommendedIndex].confidence.availableFactors}/{routeAnalyses[recommendation.recommendedIndex].confidence.totalFactors} factors)
-											</span>
-										)}
-									</div>
-									{recommendationReasons.length > 0 && (
-										<div className="mt-2 rounded-lg bg-white/70 dark:bg-gray-900/50 border border-emerald-200 dark:border-emerald-800 p-2" role="group" aria-label="Why this route">
-											<div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1">Why this route?</div>
-											<ul className="space-y-0.5 text-[11px] text-gray-600 dark:text-gray-300 list-disc list-inside">
-												{recommendationReasons.map((reason, ri) => (
-													<li key={`${ri}-${reason}`}>{reason}</li>
-												))}
-											</ul>
+							{routes.length > 1 && recommendation && routeAnalyses[recommendation.recommendedIndex] && (() => {
+								// Compact recommendation summary — one, only when the engine has
+								// enough information. It states the trade-off, it never repeats the
+								// recommended route's full card, and selection lives on the cards.
+								const recA = routeAnalyses[recommendation.recommendedIndex];
+								const fastestA = routeAnalyses[recommendation.fastestIndex];
+								return (
+									<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Route recommendation summary">
+										<div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Recommended: {recA.label}</div>
+										<div className="mt-1.5 space-y-0.5 text-[11px] text-gray-700 dark:text-gray-200">
+											{recommendation.isFastest ? (
+												<div>Fastest available route ({recA.durationMinutes} min).</div>
+											) : (
+												<>
+													<div>{Math.abs(recommendation.timeDeltaMinutes)} min {recommendation.timeDeltaMinutes > 0 ? "slower" : "faster"} than {fastestA?.label ?? "the fastest route"}.</div>
+													<div>
+														{recommendation.safetyAdvantage > 0
+															? `Safety score ${recommendation.safetyAdvantage} point${recommendation.safetyAdvantage === 1 ? "" : "s"} higher.`
+															: recommendation.safetyAdvantage === 0
+																? "Safety scores are equal."
+																: `Safety score ${Math.abs(recommendation.safetyAdvantage)} point${recommendation.safetyAdvantage === -1 ? "" : "s"} lower.`}
+														{recA.distanceKm != null && fastestA?.distanceKm != null && Math.abs(recA.distanceKm - fastestA.distanceKm) >= 0.1 && (
+															<>{` Longer by ${(recA.distanceKm - fastestA.distanceKm).toFixed(1)} km.`}</>
+														)}
+														</div>
+													</>
+											)}
+											{recA.confidence && (
+												<div
+													className="font-semibold"
+													style={{ color: recA.confidence.color }}
+													title={recA.confidence.reasons.join(" · ")}
+												>
+													Confidence: {recA.confidence.label} ({recA.confidence.availableFactors}/{recA.confidence.totalFactors} factors)
+												</div>
+											)}
 										</div>
-									)}
-									<div className="mt-3 flex flex-wrap gap-2">
-										<button
-											onClick={() => {
-												const map = window._mapInstance;
-												if (map) selectRouteById(map, routes, recommendation.recommendedIndex);
-												setRecChoice("use");
-											}}
-											className="px-3 py-1.5 rounded-control text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors duration-150"
-										>
-											Use Recommended Route
-										</button>
-										<button
-											onClick={() => setRecChoice("keep")}
-											className="px-3 py-1.5 rounded-control text-xs font-medium border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
-										>
-											Keep Current Route
-										</button>
+										{recommendationReasons.length > 0 && (
+											<div className="mt-2 rounded-lg bg-white/70 dark:bg-gray-900/50 border border-emerald-200 dark:border-emerald-800 p-2" role="group" aria-label="Why this route">
+												<div className="text-[11px] font-bold text-gray-700 dark:text-gray-200 mb-1">Why this route?</div>
+												<ul className="space-y-0.5 text-[11px] text-gray-600 dark:text-gray-300 list-disc list-inside">
+													{recommendationReasons.map((reason, ri) => (
+														<li key={`${ri}-${reason}`}>{reason}</li>
+													))}
+												</ul>
+											</div>
+										)}
+										<div className="mt-1.5 text-[10px] text-gray-500 dark:text-gray-400">Use <span className="font-semibold">Select</span> on a route card to switch routes.</div>
 									</div>
-								</div>
-							)}
+								);
+							})()}
 							<ul className="space-y-3" role="listbox" aria-label="Route options" onKeyDown={(e) => {
 								const total = routes.length; if (!total) return;
 								if (e.key === 'ArrowDown' || e.key === 'ArrowRight') { e.preventDefault(); const cur = Number(selectedRouteId) || 0; const nxt = Math.min(total - 1, cur + 1); const map = window._mapInstance; if (map) selectRouteById(map, routes, nxt); }
@@ -4451,10 +4462,22 @@ export default function App() {
 						if (!selSteps.length) return null;
 						return (
 							<div className="stars-card p-4 sm:p-5">
-								<h2 className="stars-h2 mb-1">Directions</h2>
-								<p className="stars-caption mb-3">														{routeLabel(selectedRouteId)} · {selSteps.length} steps · voice {voiceSettings.navigation && isSpeechSupported() ? "on" : "off"}
+								<div className="flex items-center justify-between gap-2 mb-1">
+									<h2 className="stars-h2">Directions · {routeLabel(selectedRouteId)} · {selSteps.length} steps</h2>
+									<button
+										type="button"
+										aria-expanded={directionsOpen}
+										aria-controls="route-directions-list"
+										onClick={() => setDirectionsOpen((v) => !v)}
+										className="shrink-0 px-3 py-1.5 rounded-control text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
+									>
+										{directionsOpen ? "Hide directions" : "Show directions"}
+									</button>
+								</div>
+								<p className="stars-caption mb-3">														voice {voiceSettings.navigation && isSpeechSupported() ? "on" : "off"}
 								</p>
-								<ol className="space-y-1.5 max-h-64 overflow-auto pr-1" aria-label={`Directions for route ${Number(selectedRouteId) + 1}`}>
+								{directionsOpen && (
+								<ol id="route-directions-list" className="space-y-1.5 max-h-64 overflow-auto pr-1" aria-label={`Directions for route ${Number(selectedRouteId) + 1}`}>
 									{selSteps.map((s, i) => {
 										let text = s.maneuver?.instruction || s.instruction || (s.name ? `Continue on ${s.name}` : "Continue");
 										// Annotate steps that begin near a planned stop
@@ -4478,6 +4501,7 @@ export default function App() {
 										);
 									})}
 								</ol>
+								)}
 							</div>
 						);
 					})()}
