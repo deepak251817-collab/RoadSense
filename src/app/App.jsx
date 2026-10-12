@@ -4,7 +4,7 @@ import moderateIcon from "../assets/potholes/moderate.svg";
 import highIcon from "../assets/potholes/high.svg";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { MapPin, CloudSun, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, List, FileText, X, Settings, Maximize2, Minimize2, Cloud, AlertTriangle, Volume2, VolumeX, CloudRain, CloudSnow, CloudDrizzle, CloudLightning, CloudFog, Sun, Wind, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
+import { MapPin, Gauge, Info, Upload, ShieldCheck, Bell, LocateFixed, Camera, List, X, Settings, Maximize2, Minimize2, AlertTriangle, Volume2, VolumeX, CloudRain, Sun, BarChart3, TrendingUp, Moon, Activity, GitCompareArrows, Wrench, FlaskConical, SlidersHorizontal, Siren, ArrowLeftRight, Compass, CheckCircle2 } from "lucide-react";
 import {
   downscaleImage,
   getBestLocation,
@@ -76,7 +76,6 @@ import WhatIfPanel from "../features/routing/WhatIfPanel";
 import { runWhatIf, normalizeWhatIfAdjustments } from "../features/routing/whatIf";
 import RoutePreferencesPanel from "../features/routing/RoutePreferencesPanel";
 import {
-  ROUTE_PREFERENCES_LABEL,
   recommendationConfigFor,
   buildExcludeParam,
   applyAvoidPreferences,
@@ -109,8 +108,6 @@ mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 // Geographic threshold for grouping duplicate pothole reports into one map marker
 const CLUSTER_THRESHOLD_METERS = 50;
-
-// Report pothole section will be rendered later in JSX (standalone card)
 
 /** Top-level application sections (target information architecture). */
 const STARS_SECTIONS = [
@@ -177,7 +174,6 @@ export default function App() {
 	const [stopSearchSuggestions, setStopSearchSuggestions] = useState([]);
 	const [trafficByRoute, setTrafficByRoute] = useState({}); // { [routeId]: { loading, error, points: [{idx, speedLive, speedFree, delayPct}], liveMinutes, freeMinutes, updatedAt } }
 	const [congestionSegments, setCongestionSegments] = useState([]); // GeoJSON Feature[] for selected route congestion coloring
-	const [openPotholeId, setOpenPotholeId] = useState(null);
 	const [potholesByRoute, setPotholesByRoute] = useState({}); // { [routeId]: { loading, error, items: [{ id, coord: [lng,lat], tags }], updatedAt } }
 	// User-reported potholes (persistent in localStorage)
 	const [userReports, setUserReports] = useState([]); // [{id, coord, severity, description, photoDataUrl, routeIdx, createdAt, status, reviewedAt}]
@@ -1468,7 +1464,6 @@ export default function App() {
 				potholeMarkersRef.current[k] = [];
 			});
 			setPotholesByRoute({});
-			setOpenPotholeId(null);
 			setCongestionSegments([]);
 			assignRouteIds(routesData); // stable ids → single source of truth for keys/labels
 			setRoutes(routesData);
@@ -2963,7 +2958,7 @@ export default function App() {
 		Object.keys(weatherMarkersRef.current).forEach((k) => { (weatherMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); weatherMarkersRef.current[k] = []; });
 		setRouteWeather({}); setOpenWeatherId(null);
 		Object.keys(potholeMarkersRef.current).forEach((k) => { (potholeMarkersRef.current[k] || []).forEach((m) => { try { m.remove(); } catch { } }); potholeMarkersRef.current[k] = []; });
-		setPotholesByRoute({}); setOpenPotholeId(null); setCongestionSegments([]);
+		setPotholesByRoute({}); setCongestionSegments([]);
 	};
 
 	// Swap origin and destination (text, coords, lock state). Results of a
@@ -4481,10 +4476,8 @@ export default function App() {
 									<input type="checkbox" checked={showOnlyUnverified} onChange={(e) => setShowOnlyUnverified(e.target.checked)} />
 									<span>Show only reported (awaiting review) on map</span>
 								</label>
-							</div>
-							<div className="flex flex-wrap gap-2 text-xs mb-3">
-								{/* Export/Import removed as requested */}
-								<button onClick={() => {
+							</div>								<div className="flex flex-wrap gap-2 text-xs mb-3">
+									<button onClick={() => {
 									if (confirm('Clear ALL reports? This cannot be undone.')) {
 										persistReports([]);
 										setUserReports([]);
