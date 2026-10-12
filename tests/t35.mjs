@@ -178,6 +178,46 @@ test("navigation: recommendation is deterministic and handles degenerate input",
   assert.equal(again.recommendedIndex, 0, "same input → same recommendation");
 });
 
+test("navigation: fastest/shortest/safest labels are distinct and tie-aware", () => {
+  // Route 1: faster but longer and tied safety — must NOT be called safer/safest.
+  const tiedScores = [
+    { index: 0, score: 58, durationSeconds: 18360, distanceKm: 206.9 }, // slower, shorter
+    { index: 1, score: 58, durationSeconds: 18120, distanceKm: 245.6 }, // faster, longer
+  ];
+  const rec = recommendRoute(tiedScores, { weights: PRIORITY_WEIGHTS.balanced });
+  assert.equal(rec.fastestIndex, 1, "fastest comes from duration data");
+  assert.equal(rec.shortestIndex, 0, "shortest comes from distance data");
+  assert.equal(rec.shortestTied, false, "distinct distances → not tied");
+  assert.equal(rec.safestIndex, null, "tied scores → nobody is Safest");
+  assert.equal(rec.safestTied, true, "the UI is told the safety scores tie");
+  assert.equal(rec.safetyTiedWithFastest, true, "tie with the fastest is explicit");
+  assert.equal(rec.safetyAdvantage, 0, "no safety advantage is invented");
+
+  // Unique max score earns the Safest label; missing distance → no Shortest claim.
+  const unique = [
+    { index: 0, score: 90, durationSeconds: 1800 },
+    { index: 1, score: 50, durationSeconds: 1200, distanceKm: 10 },
+  ];
+  const rec2 = recommendRoute(unique, { weights: PRIORITY_WEIGHTS.safest });
+  assert.equal(rec2.safestIndex, 0, "unique max score → Safest is computable");
+  assert.equal(rec2.safestTied, false);
+  assert.equal(rec2.shortestIndex, 1, "shortest from the only valid distance");
+  assert.equal(rec2.shortestTied, false);
+
+  // Tied distances are reported as ties, and no distance data → no shortest.
+  const tiedDist = [
+    { index: 0, score: 70, durationSeconds: 600, distanceKm: 5 },
+    { index: 1, score: 60, durationSeconds: 700, distanceKm: 5 },
+  ];
+  const rec3 = recommendRoute(tiedDist, { weights: PRIORITY_WEIGHTS.balanced });
+  assert.equal(rec3.shortestTied, true, "equal distances → tied");
+  const noDist = recommendRoute(
+    [{ index: 0, score: 70, durationSeconds: 600 }, { index: 1, score: 60, durationSeconds: 700 }],
+    { weights: PRIORITY_WEIGHTS.balanced }
+  );
+  assert.equal(noDist.shortestIndex, null, "missing distance → no shortest claim");
+});
+
 test("navigation: explanation reasons come from real metric differences", () => {
   const analyses = analyzeRoutes(
     [{ ...ROUTE }, { ...ROUTE, distance: 3400, duration: 1080 }],

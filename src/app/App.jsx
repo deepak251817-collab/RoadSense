@@ -4178,11 +4178,19 @@ export default function App() {
 								const fastestA = routeAnalyses[recommendation.fastestIndex];
 								return (
 									<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Route recommendation summary">
-										<div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Recommended: {recA.label}</div>
-										<div className="mt-1.5 space-y-0.5 text-[11px] text-gray-700 dark:text-gray-200">
-											{recommendation.isFastest ? (
-												<div>Fastest available route ({recA.durationMinutes} min).</div>
-											) : (
+									<div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+										{recommendation.isFastest ? `Fastest Available Route — ${recA.label}` : `Recommended: ${recA.label}`}
+									</div>
+									<div className="mt-1.5 space-y-0.5 text-[11px] text-gray-700 dark:text-gray-200">
+										{recommendation.isFastest ? (
+											<>
+												<div>Shortest travel time ({recA.durationMinutes} min).</div>
+												{recommendation.safestIndex === recommendation.recommendedIndex && (
+													<div>Also holds the highest safety score.</div>
+												)}
+												{recommendation.safestTied && <div>Safety scores are equal across routes.</div>}
+											</>
+										) : (
 												<>
 													<div>{Math.abs(recommendation.timeDeltaMinutes)} min {recommendation.timeDeltaMinutes > 0 ? "slower" : "faster"} than {fastestA?.label ?? "the fastest route"}.</div>
 													<div>
@@ -4232,6 +4240,16 @@ export default function App() {
 									const selected = String(idx) === String(selectedRouteId);
 									const bestMinutes = Math.min(...routes.map((x) => Math.round((x.duration || 0) / 60)));
 									const delta = minutes - bestMinutes;
+									// Honest badge metadata (Phase 5): ties are labelled as ties,
+									// Shortest/Safest only when the data supports the claim.
+									const fastestTiedCount = routes.filter((x) => Math.round((x.duration || 0) / 60) === bestMinutes).length;
+									const recTitle = recommendation?.recommendedIndex === idx
+										? (recommendation.isFastest
+											? "Fastest available route"
+											: recommendation.safetyAdvantage > 0
+												? `Recommended: ${recommendation.safetyAdvantage} safety point${recommendation.safetyAdvantage === 1 ? "" : "s"} higher than the fastest route`
+												: "Recommended under your route preference")
+										: undefined;
 									const rel = Math.max(10, Math.min(100, Math.round((bestMinutes / Math.max(1, minutes)) * 100)));
 									// Count of user-uploaded potholes near this route (within ~120m)
 									const potCount = userPotholeCounts[idx] || 0;
@@ -4245,6 +4263,11 @@ export default function App() {
 											relWidthPct={rel}
 											selected={selected}
 											recommended={recommendation?.recommendedIndex === idx}
+											recommendedTitle={recTitle}
+											fastestTied={delta === 0 && fastestTiedCount > 1}
+											isShortest={recommendation?.shortestIndex === idx}
+											shortestTied={recommendation?.shortestIndex === idx && recommendation?.shortestTied}
+											isSafest={recommendation?.safestIndex === idx}
 											potCount={potCount}
 											stopCount={stops.length}
 											analysis={routeAnalyses[idx] || null}

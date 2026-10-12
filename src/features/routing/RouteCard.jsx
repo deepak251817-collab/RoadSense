@@ -23,6 +23,11 @@ import { routeLabel } from "./routeIdentity";
  * @param {number} props.relWidthPct relative-time bar width (10–100)
  * @param {boolean} props.selected whether this route is selected
  * @param {boolean} props.recommended whether this route is the recommended one
+ * @param {string} [props.recommendedTitle] honest reason shown on the RECOMMENDED badge
+ * @param {boolean} [props.fastestTied] several routes share the minimum duration
+ * @param {boolean} [props.isShortest] this route has the minimum distance
+ * @param {boolean} [props.shortestTied] several routes share the minimum distance
+ * @param {boolean} [props.isSafest] this route uniquely holds the top safety score
  * @param {number} props.potCount user-reported potholes near the route
  * @param {number} props.stopCount planned stops on the route
  * @param {Object|null} props.analysis route analysis (score/classification) or null
@@ -47,6 +52,11 @@ export default function RouteCard({
 	relWidthPct,
 	selected,
 	recommended,
+	recommendedTitle,
+	fastestTied,
+	isShortest,
+	shortestTied,
+	isSafest,
 	potCount,
 	stopCount,
 	analysis,
@@ -75,18 +85,20 @@ export default function RouteCard({
 					<div className="font-semibold flex items-center gap-2">
 						<span className="text-gray-900 dark:text-gray-100">{routeLabel(idx)}</span>
 						{recommended && (
-							<span className="stars-badge-ok" title="Recommended safer route">RECOMMENDED</span>
+							<span className="stars-badge-ok" title={recommendedTitle || "Recommended route"}>RECOMMENDED</span>
 						)}
+						{isSafest && <span className="stars-badge bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" title="Highest safety score of all routes">Safest</span>}
+						{isShortest && <span className="stars-badge bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" title={shortestTied ? "Shortest distance (tied with another route)" : "Shortest distance of all routes"}>Shortest{shortestTied ? " (tied)" : ""}</span>}
 						{potCount > 0 && (
 							<span className="stars-badge-danger animate-pulse" title="User-reported potholes along this route">{potCount} pothole{potCount > 1 ? "s" : ""}</span>
 						)}
-						{selected && <span className="stars-badge bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-300">Primary</span>}
+						{selected && <span className="stars-badge bg-primary-100 text-primary-800 dark:bg-primary-900/50 dark:text-primary-300">Selected</span>}
 					</div>
 					<div className="mt-0.5 flex items-center gap-2 text-gray-700 dark:text-gray-200">
 						<span className="text-[11px] px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium">{minutes} min</span>
 						<span className="text-[11px] px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium">{km} km</span>
 						{stopCount > 0 && <span className="text-[11px] px-2 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 font-medium">via {stopCount} stop{stopCount > 1 ? "s" : ""}</span>}
-						<span className={`text-[11px] px-2 py-1 rounded-full font-medium ${delta === 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 dark:bg-gray-700"}`}>{delta === 0 ? "Fastest" : `+${delta} min`}</span>
+						<span className={`text-[11px] px-2 py-1 rounded-full font-medium ${delta === 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 dark:bg-gray-700"}`} title={delta === 0 ? (fastestTied ? "Shares the shortest travel time with another route" : "Shortest travel time of all routes") : undefined}>{delta === 0 ? (fastestTied ? "Fastest (tied)" : "Fastest") : `+${delta} min`}</span>
 						{analysis && (
 							<span
 								className="text-[11px] px-2 py-1 rounded-full font-semibold text-white whitespace-nowrap"

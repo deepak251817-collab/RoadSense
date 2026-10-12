@@ -27,10 +27,17 @@ const DEFAULT_RECOMMENDATION_CONFIG = {
 /**
  * Recommend one route from analysis records produced by utils/routeAnalysis.
  *
+ * Also reports the distinct labels the UI must keep separate (spec: Fastest
+ * = valid duration data, Shortest = valid distance data, Safest = a *unique*
+ * maximum safety score — ties are reported as `safestIndex: null` with
+ * `safestTied: true` so a route is never called "Safest" on tied scores).
+ *
  * @param {Array<Object>} analyses per-route analyses (score, durations, ...)
  * @param {Object} [config] override of DEFAULT_RECOMMENDATION_CONFIG
  * @returns {null | {
  *   recommendedIndex:number, fastestIndex:number, isFastest:boolean,
+ *   shortestIndex:number|null, shortestTied:boolean,
+ *   safestIndex:number|null, safestTied:boolean, safetyTiedWithFastest:boolean,
  *   safetyAdvantage:number, timeDeltaMinutes:number, timeDeltaPct:number,
  *   config:Object
  * }}
@@ -77,10 +84,33 @@ export function recommendRoute(analyses, config = {}) {
       ? ((winner.durationSeconds - fastest.durationSeconds) / fastest.durationSeconds) * 100
       : 0;
 
+  // Shortest: valid distance data only. Ties are reported, never guessed.
+  const withDistance = list.filter((a) => Number.isFinite(a.distanceKm));
+  let shortestIndex = null;
+  let shortestTied = false;
+  if (withDistance.length) {
+    const minKm = Math.min(...withDistance.map((a) => a.distanceKm));
+    const shortestMatches = withDistance.filter((a) => a.distanceKm === minKm);
+    shortestIndex = shortestMatches[0].index;
+    shortestTied = shortestMatches.length > 1;
+  }
+
+  // Safest: only a *unique* maximum score earns the label. On a tie nobody is
+  // "Safest" — safestIndex is null and safestTied tells the UI to say so.
+  const maxScore = Math.max(...list.map((a) => a.score));
+  const topScorers = list.filter((a) => a.score === maxScore);
+  const safestIndex = topScorers.length === 1 ? topScorers[0].index : null;
+  const safetyTiedWithFastest = winner.score === fastest.score;
+
   return {
     recommendedIndex: winner.index,
     fastestIndex: fastest.index,
     isFastest: winner.index === fastest.index,
+    shortestIndex,
+    shortestTied,
+    safestIndex,
+    safestTied: topScorers.length > 1,
+    safetyTiedWithFastest,
     safetyAdvantage: winner.score - fastest.score,
     timeDeltaMinutes: Math.round(winner.durationSeconds / 60) - Math.round(fastest.durationSeconds / 60),
     timeDeltaPct: Math.round(timeDeltaPct),
