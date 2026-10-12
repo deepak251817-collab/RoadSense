@@ -3002,8 +3002,9 @@ export default function App() {
 		setReportDialogOpen(false);
 	};
 	const reportCardEl = (
-						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">
-						<h2 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h2>
+						<div className="p-6 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 dark:border-gray-700/50 shadow-xl hover:shadow-2xl transition-shadow duration-300">											{/* h3: the Report section already titles the screen with an h2;
+											    this card is a sub-region in both the section and the dialog */}
+											<h3 className="text-base font-bold mb-3 text-gray-800 dark:text-gray-100">Report a road hazard</h3>
 						<p className="text-xs text-gray-600 dark:text-gray-300 mb-4">Report potholes, broken roads, waterlogging, debris, closures and other road-safety conditions. Your reports are stored locally in this browser (no server upload).</p>
 						<div className="space-y-4">
 							{/* Hazard type selector */}
@@ -3933,7 +3934,8 @@ export default function App() {
 								<div className="px-4 py-2 rounded-xl text-sm font-bold bg-primary-600 text-white shadow-card">{routeLabel(selectedRouteId)}</div>
 							</div>
 						)}
-						<div className="absolute top-4 right-4 flex items-center gap-2">
+						{/* Right offset clears Mapbox's own zoom/bearing controls (top-right) */}
+						<div className="absolute top-4 right-14 flex flex-wrap items-center justify-end gap-2">
 							<MapLayersPopover
 								open={layersMenuOpen}
 								onToggle={() => setLayersMenuOpen((v) => !v)}
