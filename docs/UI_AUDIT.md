@@ -1,5 +1,26 @@
 # STARS UI Audit (Phase 1 — UI restructuring)
 
+> **Status: COMPLETE.** All findings below were resolved across Phases 3–12.
+> Each "Restructuring priorities" item is annotated with the commit that
+> closed it. The audit text is preserved as the record of what was found.
+>
+> | Priority | Resolution | Commit |
+> | --- | --- | --- |
+> | 1. One route-card surface | `assignRouteIds()` gives routes stable ids; "Route N" rendered once per card; count shown once in the "Route Options" heading; map keeps a compact chip | `e47c7bd`, `14b89a0` |
+> | 2. Contextual reporting | `reportCardEl` removed from Navigate; reporting opens from a single "Report Hazard" action as a dialog (Escape closes, dirty-form guard) | `4ea6307`, `984e19b` |
+> | 3. One home per feature | Dock reduced to map-affecting layer groups only (Navigation / Safety / Hazards / Environment / Analytics); panels (prefs, what-if, analytics, voice) live in their section | `38c3b29`, `fc247d4` |
+> | 4. Theme system | `darkMode: "class"`, header sun/moon toggle, persisted to localStorage, applied consistently | `e4732cc` |
+> | 5. Compact map controls | 5 stacked FABs + chips consolidated into `MapControlDock` groups; collision with Mapbox zoom controls cleared (17px gap) | `38c3b29`, `fc247d4` |
+> | 6. Style cleanup | Inline styles and stray card/badge idioms folded into `.stars-*`; dead state (`openPotholeId`) and stale comments deleted | `00e6831`, `c215b15` |
+>
+> Additional fixes made during verification: duplicate route-analysis box and
+> banner score removed (`463fe0b`), route-card action strip wraps at 320px
+> (`d60546f`), heading hierarchy corrected to one H1 + section H2s
+> (`fc247d4`). Accessibility: global `:focus-visible` outline,
+> `prefers-reduced-motion` support, live regions for route status and hazard
+> alerts, all key text passes WCAG AA contrast (lowest 6.99:1). Responsive
+> layout verified clean at 360 / 768 / 1024 / 1440px across all six sections.
+
 Scope: `src/app/App.jsx` (4,662 lines), `src/app/sections/SectionViews.jsx`,
 `src/features/**` components, `src/index.css`, Tailwind + theme config,
 dialogs, mobile behavior. Verified against the running app at
@@ -115,19 +136,19 @@ render two different instances of the same panel.
 - `window._mapInstance` global is the map handle used by ~15 call sites
   (works, but fragile).
 
-## Restructuring priorities (feeding Phases 2–12)
+## Restructuring priorities (feeding Phases 2–12) — all delivered
 
 1. **One route-card surface**: single card component with stable identity;
    count shown once ("N routes available") above the list; map keeps a compact
-   identifier. (Phases 3, 7)
+   identifier. ✅ (Phases 3, 7)
 2. **Contextual reporting**: hide `reportCardEl` from Navigate; open it from a
-   single "Report Hazard" action as a dialog/drawer/bottom sheet. (Phase 4)
+   single "Report Hazard" action as a dialog/drawer/bottom sheet. ✅ (Phase 4)
 3. **One home per feature**: dock toggles keep only map-affecting layers;
    panels (prefs, what-if, analytics, voice) live in their section only.
-   (Phases 2, 5, 9)
+   ✅ (Phases 2, 5, 9)
 4. **Theme system**: add `darkMode: "class"`, a header sun/moon toggle,
-   persisted preference, applied consistently. (Phase 6)
+   persisted preference, applied consistently. ✅ (Phase 6)
 5. **Compact map controls**: merge the 5 FABs + chips so nothing covers the
-   map on mobile. (Phase 5)
+   map on mobile. ✅ (Phase 5)
 6. **Style cleanup**: replace remaining inline styles and stray card/badge
-   idioms with `.stars-*`; delete dead state and stale comments. (Phases 6, 11)
+   idioms with `.stars-*`; delete dead state and stale comments. ✅ (Phases 6, 11)
