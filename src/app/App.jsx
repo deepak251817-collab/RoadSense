@@ -155,6 +155,8 @@ export default function App() {
 	const [openTrafficId, setOpenTrafficId] = useState(null);
 	// Recommendation panel: null until the user accepts or keeps a route
 	const [recChoice, setRecChoice] = useState(null); // null | 'use' | 'keep'
+	// Route-results sidebar can be folded so the map keeps the stage (map-first layout)
+	const [routePanelOpen, setRoutePanelOpen] = useState(true);
 	// Incident intelligence state
 	const [externalIncidents, setExternalIncidents] = useState({ available: false, items: [], error: null });
 	const [openIncidentId, setOpenIncidentId] = useState(null);
@@ -257,12 +259,17 @@ export default function App() {
 		window.addEventListener("hashchange", onHash);
 		return () => window.removeEventListener("hashchange", onHash);
 	}, []);
-	// The map stays mounted while a section is open; re-measure it when Navigate returns
+	// The route-results sidebar only exists when there is something to show
+	// (results, admin tools or report-adjust controls). Before the first search
+	// the Navigate page shows just the map and the compact plan panel.
+	const asideVisible = routes.length > 0 || adminMode || Boolean(reportForm.coord);
+	// The map stays mounted while a section is open; re-measure it when Navigate
+	// returns or when the results sidebar appears/disappears (layout shift)
 	useEffect(() => {
 		if (activeSection !== "navigate") return;
 		const id = requestAnimationFrame(() => { try { window._mapInstance?.resize(); } catch { } });
 		return () => cancelAnimationFrame(id);
-	}, [activeSection]);
+	}, [activeSection, asideVisible]);
 	// Camera capture for report
 	const [cameraOpen, setCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState(null);
@@ -1493,9 +1500,9 @@ export default function App() {
 			try {
 				let bestDur = Number.MAX_SAFE_INTEGER;
 				routesData.forEach((r, i) => { const d = r?.duration ?? Number.MAX_SAFE_INTEGER; if (d < bestDur) { bestDur = d; primaryId = i; } });
-			} catch { }
-			setSelectedRouteId(String(primaryId));
-			setRecChoice(null); // fresh routes → fresh recommendation offer
+			} catch { }							setSelectedRouteId(String(primaryId));
+						setRecChoice(null); // fresh routes → fresh recommendation offer
+						setRoutePanelOpen(true); // fresh results → the sidebar is open again
 			drawRoutesOnMap(map, routesData, primaryId);
 			// re-render user-reported markers after route change
 			renderUserPotholeMarkers();
@@ -3552,7 +3559,7 @@ export default function App() {
 			)}
 
 			<div className={`max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8${activeSection === "navigate" ? "" : " hidden"}`}>
-				<section className="lg:col-span-2 space-y-6">
+				<section className={`${asideVisible ? "lg:col-span-2" : "lg:col-span-3"} space-y-6`}>
 					{/* Controls */}
 					<div ref={reportCardRef} className="stars-card p-4 sm:p-6">
 						<div className="mb-4">
@@ -3953,7 +3960,7 @@ export default function App() {
 							if (map && Array.isArray(report.coord)) map.flyTo({ center: report.coord, zoom: 16, duration: 800 });
 						}}
 					/>
-					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 lg:h-[540px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
+					<div className={`${fullMap ? 'fixed inset-0 z-40 h-screen w-screen m-0 rounded-none border-0' : 'relative mt-6 h-96 sm:h-[450px] lg:h-[620px] rounded-2xl border-4'} overflow-hidden shadow-2xl hover:shadow-3xl transition-shadow duration-300 ${pickingMode ? 'ring-4 ring-amber-400 border-gray-200/50 dark:border-gray-700/50' : 'border-gray-200/50 dark:border-gray-700/50'}`}>
 						<div ref={mapContainerRef} className="absolute inset-0" />
 						{/* Map overlay: selected route chip + quick actions */}
 						{selectedRouteId != null && (
@@ -4077,16 +4084,32 @@ export default function App() {
 					)}
 				</section>
 
-				<aside className="space-y-6">
-					{routes.length > 0 && (
+				{asideVisible && (
+					<aside className="space-y-6 max-h-[70vh] overflow-y-auto lg:max-h-[calc(100vh-7rem)] lg:pr-1">
+						{routes.length > 0 && (
 						<div className="stars-card p-4 sm:p-5">
 							<div className="mb-4 sticky top-4 z-10 bg-white/90 dark:bg-gray-900/90 py-1 rounded-control">
-								<h2 className="stars-h2">Route Options</h2>
-								{/* Route count: derived from the routes array, shown exactly once */}
-								<p className="stars-caption" data-testid="route-count">
-									{routes.length} route{routes.length === 1 ? "" : "s"} available
-								</p>
+								<div className="flex items-start justify-between gap-2">
+									<div className="min-w-0">
+										<h2 className="stars-h2">Route Options</h2>
+										{/* Route count: derived from the routes array, shown exactly once */}
+										<p className="stars-caption" data-testid="route-count">
+											{routes.length} route{routes.length === 1 ? "" : "s"} available
+										</p>
+									</div>
+									<button
+										type="button"
+										onClick={() => setRoutePanelOpen((v) => !v)}
+										aria-expanded={routePanelOpen}
+										aria-controls="route-results-body"
+										className="shrink-0 px-2.5 py-1.5 rounded-control text-xs font-semibold border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150"
+									>
+										{routePanelOpen ? "Hide panel" : "Show panel"}
+									</button>
+								</div>
 							</div>
+							{routePanelOpen && (
+							<div id="route-results-body">
 
 							{/* Multi-route comparison: actual per-route analysis results */}
 							{routeAnalyses.length > 1 && (
@@ -4415,22 +4438,15 @@ export default function App() {
 														<div className="text-[11px] text-gray-500">No weather data at sampled points yet. Try Refresh.</div>
 													)}
 													<div className="mt-2 text-[10px] text-gray-500">Weather data: OpenWeather</div>
-												</div>									)}
-									</RouteCard>
-									);
-								})}
-							</ul>
-						</div>
-					)}
-					{/* Empty state — no routes found yet (never stale cards) */}
-					{routes.length === 0 && !routesLoading && (
-						<div className="stars-card p-4 sm:p-5">
-							<h2 className="stars-h2 mb-1">Route Options</h2>
-							<p className="stars-empty">No routes yet. Set an origin and destination above, then choose <span className="font-semibold">Find Routes</span> to compare safe options side by side.</p>
+												</div>									)}										</RouteCard>
+										);
+									})}							</ul>
+							</div>
+						)}
 						</div>
 					)}
 					{/* Turn-by-turn directions for the selected route */}
-					{selectedRouteId != null && routes[Number(selectedRouteId)] && (() => {
+					{routePanelOpen && selectedRouteId != null && routes[Number(selectedRouteId)] && (() => {
 						const selSteps = getStepsForRoute(routes[Number(selectedRouteId)]);
 						if (!selSteps.length) return null;
 						return (
@@ -4605,7 +4621,8 @@ export default function App() {
 						</div>
 					)}
 
-				</aside>
+					</aside>
+				)}
 			</div>
 
 			{/* Dedicated sections — the map view stays mounted (hidden) underneath */}
