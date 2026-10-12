@@ -4104,8 +4104,9 @@ export default function App() {
 								<div className="mb-4 rounded-xl border-2 border-emerald-400 dark:border-emerald-600 bg-emerald-50/80 dark:bg-emerald-900/20 p-3" role="region" aria-label="Recommended safer route">
 									<div className="flex items-center justify-between gap-2">
 										<span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Recommended safer route</span>
-										<span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: routeAnalyses[recommendation.recommendedIndex].classification.color }}>
-											Safety: {routeAnalyses[recommendation.recommendedIndex].score}/100
+										{/* Score shown once on the route card itself — not repeated here */}
+										<span className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-200 whitespace-nowrap">
+											{routeAnalyses[recommendation.recommendedIndex].classification?.label}
 										</span>
 									</div>
 									<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
@@ -4219,43 +4220,8 @@ export default function App() {
 													removeWeatherMarkersFor(idx);
 												}
 											}}
-											weatherPointCount={routeWeather[idx]?.points?.length || 0}
-										>
-											{routeAnalyses[idx] && (
-									<div className="mt-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 space-y-1.5">
-										<div className="flex items-center justify-between gap-2">
-											<span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Route analysis</span>
-											<span className="text-[11px] font-bold px-2 py-0.5 rounded-full text-white whitespace-nowrap" style={{ backgroundColor: routeAnalyses[idx].classification.color }}>
-												Safety: {routeAnalyses[idx].score}/100
-											</span>
-										</div>
-										<div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-700 dark:text-gray-300">
-											<span>Distance: {routeAnalyses[idx].distanceKm.toFixed(1)} km</span>
-											<span>Time: {routeAnalyses[idx].durationMinutes} min</span>
-											<span>Traffic: {routeAnalyses[idx].traffic.label}{routeAnalyses[idx].traffic.estimated ? " (est.)" : ""}</span>
-											<span>Potholes: {routeAnalyses[idx].potholes.count} ({routeAnalyses[idx].potholes.highCount} high)</span>
-											<span>Weather: {routeAnalyses[idx].weather.label}</span>
-											<span>Incidents: {routeAnalyses[idx].incidents.label}</span>
-											<span style={{ color: routeAnalyses[idx].time.color, fontWeight: 600 }}>Time of day: {routeAnalyses[idx].time.label}</span>
-										</div>
-										<div className="text-[10px] text-gray-500 dark:text-gray-400">
-											{routeAnalyses[idx].classification.label}
-											{routeAnalyses[idx].missingFactors.length > 0 && ` · ${routeAnalyses[idx].missingFactors.length} factor(s) unavailable`}
-											{' '}· Typical safest window {String(safestWindow.startHour).padStart(2, '0')}:00–{String(safestWindow.endHour).padStart(2, '0')}:00 (risk {safestWindow.risk})
-										</div>
-										{routeAnalyses[idx].confidence && (
-											<div
-												className="text-[10px] font-semibold"
-												style={{ color: routeAnalyses[idx].confidence.color }}
-												title={routeAnalyses[idx].confidence.reasons.join(" · ")}
-											>
-												Confidence: {routeAnalyses[idx].confidence.label} ({routeAnalyses[idx].confidence.availableFactors}/{routeAnalyses[idx].confidence.totalFactors} factors)
-											</div>
-										)}
-									</div>
-								)}
-
-								{String(openDetailsId) === String(idx) && (() => {
+											weatherPointCount={routeWeather[idx]?.points?.length || 0}										>
+										{String(openDetailsId) === String(idx) && (() => {
 									const ana = routeAnalyses.find((a) => a.index === idx);
 									if (!ana) return null;
 									return (
@@ -4277,8 +4243,15 @@ export default function App() {
 														<span className="w-8 text-right text-gray-500 dark:text-gray-400">{Math.round(v)}</span>
 													</li>
 												))}
-											</ul>
-											<p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Per-factor risk 0–100 (higher = more risk).</p>
+											</ul>												<p className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">Per-factor risk 0–100 (higher = more risk).</p>
+												<div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-gray-700 dark:text-gray-300">
+													<span>Traffic: {ana.traffic.label}{ana.traffic.estimated ? " (est.)" : ""}</span>
+													<span>Potholes: {ana.potholes.count} ({ana.potholes.highCount} high)</span>
+													<span>Weather: {ana.weather.label}</span>
+													<span>Incidents: {ana.incidents.label}</span>
+													<span style={{ color: ana.time.color, fontWeight: 600 }}>Time of day: {ana.time.label}</span>
+													<span className="text-gray-500 dark:text-gray-400">Typical safest window {String(safestWindow.startHour).padStart(2, "0")}:00–{String(safestWindow.endHour).padStart(2, "0")}:00 (risk {safestWindow.risk})</span>
+												</div>
 											{(ana.missingFactors || []).length > 0 && (
 												<p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">Insufficient data for: {ana.missingFactors.map((k) => FACTOR_LABELS[k] || k).join(", ")} — the score was computed from the remaining factors.</p>
 											)}
