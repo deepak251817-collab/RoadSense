@@ -1549,6 +1549,8 @@ export default function App() {
 			if (e.key !== "Escape") return;
 			if (imageModal.open) setImageModal({ open: false, src: null, caption: "" });
 			else if (cameraOpen) setCameraOpen(false);
+			// Report dialog is aria-modal — close it first (honors the dirty-form guard)
+			else if (reportDialogOpen) attemptCloseReportDialog();
 			else if (rejectModal.open) setRejectModal({ open: false, reportId: null });
 			else if (fixModal.open) setFixModal({ open: false, reportId: null });
 			else if (adminPinOpen) setAdminPinOpen(false);
