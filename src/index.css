@@ -8,7 +8,8 @@
 
 body {
   margin: 0;
-  min-width: 320px;
+  /* No min-width floor: with a classic scrollbar, a 320px min-width forces
+     horizontal overflow on 320px viewports (clientWidth drops below 320). */
   min-height: 100vh;
 }
 
