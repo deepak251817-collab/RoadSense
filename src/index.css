@@ -188,6 +188,18 @@ html, body, #root {
   }
 }
 
+/* Recharts tooltips default to an opaque white box, which breaks dark
+   mode. Follow the app theme (dark class on <html>) instead. */
+.dark .recharts-default-tooltip {
+  background-color: rgb(17 24 39) !important; /* gray-900 */
+  border: 1px solid rgb(55 65 81) !important; /* gray-700 */
+  border-radius: 0.5rem;
+}
+.dark .recharts-default-tooltip .recharts-tooltip-label,
+.dark .recharts-default-tooltip .recharts-tooltip-item-list {
+  color: rgb(243 244 246) !important; /* gray-100 */
+}
+
 /* Respect the OS reduced-motion preference: collapse animations and
    transitions (spinners still communicate state via other cues). */
 @media (prefers-reduced-motion: reduce) {
