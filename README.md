@@ -108,15 +108,19 @@ External APIs     Mapbox (tiles/directions), OpenWeather, Nominatim,
                   optional GeoJSON incident feed, Overpass (emergency)
 ```
 
-The interface is organized into six sections; every panel lives in exactly one:
+The interface is organized into seven sections; every panel lives in exactly one.
+Section keys double as URL hash segments (`#/navigate`, `#/safety`, …), so a
+section is linkable and route state survives switching (the map stays mounted):
 
 ```
 Navigate          map, search, routes, comparison, recommendation, hazards
-Road Safety       score, factors, confidence, prediction, segment risk
-Report a Hazard   unified form (type, evidence, location, severity, tracking)
-Trips             trip history + trip analytics
+Safety            route score, factors, confidence, prediction, segment risk
+Hazards           reported-hazard listing + unified form (type, evidence,
+                  location, severity, review status)
+Environment       traffic, weather and data-source availability for the route
+Analytics         trip history + trip safety analytics
 Road Intelligence road health, hotspots, changes, repair priority; Municipal (admin)
-Settings          route preferences, map/display controls, voice settings
+Tools             route preferences, map/display controls, voice settings
 ```
 
 Feature folders pair each domain's pure logic with its panels:

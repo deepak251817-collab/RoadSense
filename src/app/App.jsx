@@ -3280,6 +3280,16 @@ export default function App() {
 		selectedRouteId, routeWeather, fetchWeatherForRoute,
 		tripHistory, tripStats, clearTrips, safetyAnalytics,
 		hotspots, focusHotspot, userReports, roadHealth, changes, rankedRepairs,
+		// Jump from the Hazards listing to a report's location on the Navigate map
+		focusHazard: (coord) => {
+			if (!coord) return;
+			setActiveSection("navigate");
+			window.location.hash = "#/navigate";
+			setTimeout(() => {
+				const map = window._mapInstance;
+				if (map) map.easeTo({ center: coord, zoom: Math.max(map.getZoom(), 15), duration: 600 });
+			}, 120);
+		},
 		whatIf, whatIfMode, setWhatIfMode, whatIfAdjustments, setWhatIfAdjustments,
 		adminMode, municipalSummary, municipalReports, municipalFilters,
 		setMunicipalFilters, locationOptions,

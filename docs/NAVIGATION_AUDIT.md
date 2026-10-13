@@ -35,18 +35,19 @@ route results everywhere. Current state after the UI restructuring commits:
 
 ### 3.1 Page set and naming (Phase 2)
 
-| Spec page | Current section | Gap |
+| Spec page | Current section | Status |
 | --- | --- | --- |
-| Navigate `/navigate` | `navigate` Navigate | name ok |
-| Safety `/safety` | `safety` "Road Safety" | rename |
-| Hazards `/hazards` | `report` "Report a Hazard" | rename + **missing hazard listings** (section shows only the form, `SectionViews.jsx:160`; spec requires existing hazards with type/severity/location/verification status) |
-| Environment `/environment` | — | **missing entirely** (traffic/weather exist only as per-route panels and map layers; no page with data-availability/source status) |
-| Analytics `/analytics` | `trips` Trips (history + safety analytics) | rename; content qualifies as trip analytics with real data |
-| Tools `/tools` | `settings` Settings (route preferences, voice) | rename; Road Intelligence's what-if simulation also belongs to Tools conceptually |
-| (justified extra) | `intelligence` Road Intelligence | retain: road health, hotspots, change detection, repair priority, municipal dashboard are advertised core features |
+| Navigate `/navigate` | `navigate` Navigate | ✅ shipped |
+| Safety `/safety` | `safety` Safety (route score + risk panels) | ✅ renamed (`759bb98`) |
+| Hazards `/hazards` | `report` Hazards (listing + report form) | ✅ renamed (`759bb98`); hazard listing added — type, severity, location, review status, and a "Show on map" action that returns to Navigate and flies to the report |
+| Environment `/environment` | `environment` Environment (traffic, weather, data-source status) | ✅ page added (`759bb98`) |
+| Analytics `/analytics` | `trips` Analytics (history + safety analytics) | ✅ renamed (`759bb98`) |
+| Tools `/tools` | `settings` Tools (route preferences, voice) | ✅ renamed (`759bb98`); Road Intelligence's what-if simulation also belongs to Tools conceptually |
+| (justified extra) | `intelligence` Road Intelligence | retained: road health, hotspots, change detection, repair priority, municipal dashboard are advertised core features |
 
-No URL routes exist; paths in the spec are suggested and navigation must
-not reset route state (hash routing can preserve it — map stays mounted).
+Hash routing ships: section keys double as URL hash segments (`#/navigate`,
+`#/safety`, …). The map stays mounted while other sections are open, so
+navigation never resets route state.
 
 ### 3.2 Route recommendation and safety labels (Phase 5 — correctness)
 
@@ -57,32 +58,32 @@ Engine (`src/features/routing/recommendation.js`):
   on duration; reasons are data-driven (`buildRecommendationReasons`).
 - ✅ Classification bands correct: 40–59 → **Risky**
   (`safetyScore.js:27`), matching the spec example.
-- ❌ Engine does not compute **shortest** (min distance) or **safest**
-  (unique max score) indexes the spec requires for labels.
-- ❌ UI hard-codes "safer" regardless of data:
-  - `App.jsx:4105` panel header **"Recommended safer route"** and
-    `App.jsx:4103` `aria-label` — shown even when `safetyAdvantage === 0`
-    (tied scores) or when the recommendation is purely time-based.
-    Spec rule 2 forbids safer claims on ties; rule: time-only
-    recommendations must read **"Fastest Available Route"**.
-  - `RouteCard.jsx:78` RECOMMENDED badge `title="Recommended safer route"` —
-    same defect.
-- ❌ `+${safetyAdvantage} safety points` (`App.jsx:4119`) renders
-  "+0 safety points" on ties instead of explicitly communicating the tie
-  (spec rule 7).
-- ❌ No **Shortest** or **Safest** badge on cards (spec rules 1–4).
-- ⚠ `RouteCard.jsx:89` shows "Fastest" for every route whose duration
-  equals the minimum — ambiguous when durations tie; tie should be labeled.
-- ⚠ Selected badge reads "Primary" (`RouteCard.jsx:86`) — spec distinguishes
-  Selected vs Recommended vs Fastest; "Primary" is an extra unlabeled term.
+- ✅ Engine computes **shortest** (`shortestIndex`, min distance) and
+  **safest** (`safestIndex`, unique max score) indexes, plus tie flags
+  (`shortestTied`, `safestTied`, `safetyTiedWithFastest`) — ties report
+  `null` index so the UI can say so (`1c3bbc5`).
+- ✅ UI no longer hard-codes "safer":
+  - Time-only recommendations read **"Fastest Available Route"**; the
+    summary only claims a safety advantage when `safetyAdvantage > 0` and
+    states an explicit tie when it is `0` (spec rules 2, 7) (`1c3bbc5`).
+  - RECOMMENDED badge title is honest about the basis (`1c3bbc5`).
+- ✅ **Shortest** and **Safest** badges render on cards, with tie labels
+  (spec rules 1–4) (`1c3bbc5`).
+- ✅ "Fastest" is tie-aware: shows **"Fastest (tied)"** when durations
+  share the minimum (`1c3bbc5`).
+- ✅ Selected badge reads **"Selected"** (not "Primary"), matching the
+  spec's Selected vs Recommended vs Fastest distinction (`1c3bbc5`).
 
 ### 3.3 Controls, panels, theme, responsive (Phases 3, 4, 6–9)
 
 Already satisfied by committed work (commits in §2 plus `e4732cc` theme,
 `fc247d4` collision/heading fix, `d60546f` 320px overflow, accessibility
 pass: `:focus-visible`, `prefers-reduced-motion`, live regions, AA
-contrast). Remaining: no Environment page (§3.1) and label correctness
-(§3.2).
+contrast). Environment page (§3.1) and label correctness (§3.2) are now
+shipped — see `759bb98` (Environment section) and `1c3bbc5` (labels).
+Dark-mode chart tooltips themed (`abee83a`); 320px body `min-width`
+overflow removed (`544e97f`); missing-basemap-sprite warning silenced
+(`8e4b3e0`).
 
 ## 4. Phase plan derived from findings
 
@@ -92,3 +93,8 @@ contrast). Remaining: no Environment page (§3.1) and label correctness
    add Fastest/Shortest/Safest/Selected badges with tie handling.
 3. Phases 3, 4, 6, 7, 8, 9: verify committed work against the checklist.
 4. Phases 10–11: full regression run, docs, release.
+
+**Outcome (all phases complete):** every item above shipped. Regression is
+green — `vite build` succeeds and all 13 test suites pass
+(`node tests/run-all.mjs`). This audit's findings are reconciled with the
+code: the ✅/❌→fixed markers cite the commit that closed each one.

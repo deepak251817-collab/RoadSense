@@ -12,6 +12,8 @@ import MunicipalDashboard from "../../features/admin/MunicipalDashboard";
 import RoutePreferencesPanel from "../../features/routing/RoutePreferencesPanel";
 import { routeLabel } from "../../features/routing/routeIdentity";
 import { FACTOR_LABELS } from "../../features/safety/safetyScore";
+import { hazardTypeMeta } from "../../features/safety/hazardTypes";
+import { STATUS_LABELS, STATUS_STYLES } from "../../features/admin/hazardLifecycle";
 
 // Lazy: keeps the chart library and prediction UI out of the initial bundle
 const AnalyticsPanel = React.lazy(() => import("../../features/community/AnalyticsPanel"));
@@ -40,6 +42,7 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 		selectedRouteId, routeWeather, fetchWeatherForRoute,
 		tripHistory, tripStats, clearTrips, safetyAnalytics,
 		hotspots, focusHotspot, userReports, roadHealth, changes, rankedRepairs,
+		focusHazard,
 		whatIf, whatIfMode, setWhatIfMode, whatIfAdjustments, setWhatIfAdjustments,
 		adminMode, municipalSummary, municipalReports, municipalFilters,
 		setMunicipalFilters, locationOptions,
@@ -164,9 +167,42 @@ export default function SectionViews({ section, hidden, setHidden, ...ctx }) {
 					<div>
 						<h2 className="stars-h2">Hazards</h2>
 						<p className="stars-caption">Every reported hazard — type, severity, location and review status — plus one workflow to report a new one: pick the type, add evidence, confirm the location, choose severity and submit.</p>
-					</div>						{reportCardEl}
 					</div>
-				)}
+					{reportCardEl}
+					<div>
+						<h3 className="stars-h3 mb-3">Reported hazards ({userReports.length})</h3>
+						{userReports.length === 0 ? (
+							<p className="stars-empty">No hazards reported yet. Use the form above to report the first one — it will show up here with its type, severity, location and review status.</p>
+						) : (
+							<ul className="space-y-2" role="list">
+								{userReports.map((r) => {
+									const typeLabel = hazardTypeMeta(r.type).label;
+									const st = STATUS_STYLES[r.status] || STATUS_STYLES.reported;
+									const stLabel = STATUS_LABELS[r.status] || "Reported";
+									const ts = r.captureAt || r.createdAt;
+									return (
+										<li key={r.id} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2">
+											<div className="flex flex-wrap items-center gap-2 text-sm">
+												<span className="font-semibold text-gray-800 dark:text-gray-100">{typeLabel}</span>
+												<span className="text-[11px] px-2 py-0.5 rounded-full font-semibold capitalize bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{r.severity || "moderate"}</span>
+												<span className="text-[11px] px-2 py-0.5 rounded-full font-semibold" style={{ backgroundColor: st.bg, color: st.text }}>{stLabel}</span>
+												{ts && <span className="text-[11px] text-gray-500 dark:text-gray-400">{new Date(ts).toLocaleString()}</span>}
+											</div>
+											{r.description && <p className="mt-1 text-xs text-gray-600 dark:text-gray-300">{r.description}</p>}
+											<div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+												{r.coord && <span>{r.coord[1].toFixed(5)}, {r.coord[0].toFixed(5)}</span>}
+												{r.coord && (
+													<button onClick={() => focusHazard(r.coord)} className="text-[11px] font-semibold text-primary-700 dark:text-primary-300 underline">Show on map</button>
+												)}
+											</div>
+										</li>
+									);
+								})}
+							</ul>
+						)}
+					</div>
+				</div>
+			)}
 
 			{section === "environment" && (
 				<div className="space-y-6 max-w-3xl">
