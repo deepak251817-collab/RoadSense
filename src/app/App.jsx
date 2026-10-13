@@ -766,6 +766,19 @@ export default function App() {
 			// keep a global reference to update markers later
 			// eslint-disable-next-line no-underscore-dangle
 			window._mapInstance = map;
+			// The Mapbox basemap sprite omits a few icons its layers still
+			// reference (e.g. "in-state-4"), which logs a warning on every load.
+			// Register a transparent 1x1 placeholder for any missing image so the
+			// warning is silenced and nothing renders a broken glyph.
+			try {
+				map.on('styleimagemissing', (e) => {
+					try {
+						const id = e?.id;
+						if (!id || map.hasImage(id)) return;
+						map.addImage(id, { width: 1, height: 1, data: new Uint8Array([0, 0, 0, 0]) }, { pixelRatio: 1 });
+					} catch { /* never let a missing sprite break the map */ }
+				});
+			} catch { }
 			// Ensure any pre-existing stops are drawn once the style loads
 			try { map.on('load', () => { try { renderStopMarkers(); } catch { } try { renderSafetyHeatmap(); } catch { } try { renderRoadRiskLayer(); } catch { } }); } catch { }
 			// Attempt to start live location watch so user marker is always shown (permission based)
